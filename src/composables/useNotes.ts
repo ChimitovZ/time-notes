@@ -23,8 +23,16 @@ const noteVersionSchema = z.object({
   text: z.string(),
   createdAt: z.string(),
 })
+const noteCommentSchema = z.object({
+  id: z.number().int().min(1),
+  noteId: z.number().int().min(1),
+  text: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+})
 const groupsSchema = z.array(groupSchema)
 const noteVersionsSchema = z.array(noteVersionSchema)
+const noteCommentsSchema = z.array(noteCommentSchema)
 const paginatedNotesSchema = z.object({
   items: notesSchema,
   total: z.number().int().min(0),
@@ -44,6 +52,7 @@ const createGroupSchema = z.object({
 
 export type Note = z.infer<typeof noteSchema>
 export type NoteVersion = z.infer<typeof noteVersionSchema>
+export type NoteComment = z.infer<typeof noteCommentSchema>
 export type NoteGroup = z.infer<typeof groupSchema>
 export type PaginatedNotes = z.infer<typeof paginatedNotesSchema>
 
@@ -169,6 +178,55 @@ async function restoreNoteVersion(payload: { noteId: number; version: number }):
   return parsed.data
 }
 
+async function fetchNoteComments(noteId: number): Promise<NoteComment[]> {
+  const response = await http.get(`/notes/${noteId}/comments`)
+  const parsed = noteCommentsSchema.safeParse(response.data)
+
+  if (!parsed.success) {
+    throw new Error('Сервер вернул комментарии в неверном формате')
+  }
+
+  return parsed.data
+}
+
+async function createNoteComment(payload: { noteId: number; text: string }): Promise<NoteComment> {
+  const parsedInput = createNoteSchema.safeParse({ text: payload.text })
+
+  if (!parsedInput.success) {
+    throw new Error('Текст комментария пустой или слишком длинный')
+  }
+
+  const response = await http.post(`/notes/${payload.noteId}/comments`, parsedInput.data)
+  const parsed = noteCommentSchema.safeParse(response.data)
+
+  if (!parsed.success) {
+    throw new Error('Сервер вернул данные комментария в неверном формате')
+  }
+
+  return parsed.data
+}
+
+async function updateNoteComment(payload: { commentId: number; text: string }): Promise<NoteComment> {
+  const parsedInput = createNoteSchema.safeParse({ text: payload.text })
+
+  if (!parsedInput.success) {
+    throw new Error('Текст комментария пустой или слишком длинный')
+  }
+
+  const response = await http.patch(`/comments/${payload.commentId}`, parsedInput.data)
+  const parsed = noteCommentSchema.safeParse(response.data)
+
+  if (!parsed.success) {
+    throw new Error('Сервер вернул данные комментария в неверном формате')
+  }
+
+  return parsed.data
+}
+
+async function deleteNoteComment(commentId: number): Promise<void> {
+  await http.delete(`/comments/${commentId}`)
+}
+
 export function formatNoteDate(value: string): string {
   const parsed = new Date(value)
 
@@ -244,6 +302,15 @@ export function useNotes(
       await queryClient.invalidateQueries({ queryKey: ['notes'] })
     },
   })
+  const createCommentMutation = useMutation({
+    mutationFn: createNoteComment,
+  })
+  const updateCommentMutation = useMutation({
+    mutationFn: updateNoteComment,
+  })
+  const deleteCommentMutation = useMutation({
+    mutationFn: deleteNoteComment,
+  })
 
   const notesCount = computed(() => query.data.value?.total ?? 0)
   const notes = computed(() => query.data.value?.items ?? [])
@@ -260,12 +327,19 @@ export function useNotes(
     createGroup: createGroupMutation.mutateAsync,
     fetchNoteVersions,
     restoreNoteVersion: restoreVersionMutation.mutateAsync,
+    fetchNoteComments,
+    createNoteComment: createCommentMutation.mutateAsync,
+    updateNoteComment: updateCommentMutation.mutateAsync,
+    deleteNoteComment: deleteCommentMutation.mutateAsync,
     isCreating: createMutation.isPending,
     isUpdating: updateMutation.isPending,
     isDeleting: deleteMutation.isPending,
     isImproving: improveMutation.isPending,
     isCreatingGroup: createGroupMutation.isPending,
     isRestoringVersion: restoreVersionMutation.isPending,
+    isCreatingComment: createCommentMutation.isPending,
+    isUpdatingComment: updateCommentMutation.isPending,
+    isDeletingComment: deleteCommentMutation.isPending,
     isGroupsLoading: groupsQuery.isLoading,
     notesCount,
   }

@@ -38,6 +38,22 @@ db.exec(`
 `)
 
 db.exec(`
+  CREATE TABLE IF NOT EXISTS note_comments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    note_id INTEGER NOT NULL,
+    text TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE CASCADE
+  )
+`)
+
+db.exec(`
+  CREATE INDEX IF NOT EXISTS idx_note_comments_note_id_created_at
+  ON note_comments(note_id, created_at DESC)
+`)
+
+db.exec(`
   CREATE TABLE IF NOT EXISTS note_groups (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,

@@ -2,7 +2,13 @@
 import { computed, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 
-import { formatNoteDate, useNotes, type Note, type NoteVersion } from '@/composables/useNotes'
+import {
+  formatNoteDate,
+  useNotes,
+  type Note,
+  type NoteComment,
+  type NoteVersion,
+} from '@/composables/useNotes'
 import { useUiStore } from '@/stores/ui'
 
 const uiStore = useUiStore()
@@ -28,7 +34,14 @@ const {
   createGroup,
   fetchNoteVersions,
   restoreNoteVersion,
+  fetchNoteComments,
+  createNoteComment,
+  updateNoteComment,
+  deleteNoteComment,
   isRestoringVersion,
+  isCreatingComment,
+  isUpdatingComment,
+  isDeletingComment,
   notesCount,
 } = useNotes(notesPerPage, currentPage, selectedGroupId)
 
@@ -42,6 +55,12 @@ const modalText = ref('')
 const noteVersions = ref<NoteVersion[]>([])
 const isVersionsLoading = ref(false)
 const versionsError = ref('')
+const noteComments = ref<NoteComment[]>([])
+const isCommentsLoading = ref(false)
+const commentsError = ref('')
+const newCommentText = ref('')
+const editingCommentId = ref<number | null>(null)
+const editingCommentText = ref('')
 
 const totalPages = computed(() => Math.max(1, Math.ceil(notesCount.value / notesPerPage.value)))
 const selectedNotesCount = computed(() => selectedNoteIds.value.length)
@@ -196,6 +215,7 @@ function openNoteModal(note: Note) {
   openedNote.value = note
   modalText.value = note.text
   void loadNoteVersions(note.id)
+  void loadNoteComments(note.id)
 }
 
 function closeNoteModal() {
@@ -204,6 +224,12 @@ function closeNoteModal() {
   noteVersions.value = []
   versionsError.value = ''
   isVersionsLoading.value = false
+  noteComments.value = []
+  commentsError.value = ''
+  isCommentsLoading.value = false
+  newCommentText.value = ''
+  editingCommentId.value = null
+  editingCommentText.value = ''
 }
 
 async function improveModalText() {
@@ -253,6 +279,19 @@ async function loadNoteVersions(noteId: number) {
   }
 }
 
+async function loadNoteComments(noteId: number) {
+  isCommentsLoading.value = true
+  commentsError.value = ''
+
+  try {
+    noteComments.value = await fetchNoteComments(noteId)
+  } catch (error) {
+    commentsError.value = error instanceof Error ? error.message : 'Не удалось загрузить комментарии'
+  } finally {
+    isCommentsLoading.value = false
+  }
+}
+
 async function restoreFromHistory(version: number) {
   if (!openedNote.value) {
     return
@@ -275,6 +314,52 @@ async function restoreFromHistory(version: number) {
 function getVersionPreview(text: string): string {
   const normalized = text.replace(/\s+/g, ' ').trim()
   return normalized.length > 90 ? `${normalized.slice(0, 90).trimEnd()}...` : normalized
+}
+
+function startEditComment(comment: NoteComment) {
+  editingCommentId.value = comment.id
+  editingCommentText.value = comment.text
+}
+
+function cancelEditComment() {
+  editingCommentId.value = null
+  editingCommentText.value = ''
+}
+
+async function submitComment() {
+  if (!openedNote.value) {
+    return
+  }
+
+  await createNoteComment({ noteId: openedNote.value.id, text: newCommentText.value })
+  newCommentText.value = ''
+  await loadNoteComments(openedNote.value.id)
+}
+
+async function saveCommentEdit(commentId: number) {
+  if (!openedNote.value) {
+    return
+  }
+
+  await updateNoteComment({ commentId, text: editingCommentText.value })
+  cancelEditComment()
+  await loadNoteComments(openedNote.value.id)
+}
+
+async function removeComment(commentId: number) {
+  if (!openedNote.value) {
+    return
+  }
+
+  if (!window.confirm('Удалить комментарий?')) {
+    return
+  }
+
+  await deleteNoteComment(commentId)
+  if (editingCommentId.value === commentId) {
+    cancelEditComment()
+  }
+  await loadNoteComments(openedNote.value.id)
 }
 </script>
 
@@ -665,6 +750,96 @@ function getVersionPreview(text: string): string {
           </li>
         </ul>
         <p v-else :class="[mutedTextClass, 'text-[11px]']">История пока пустая.</p>
+      </div>
+
+      <div :class="[subtleSurfaceClass, 'mb-3 rounded-xl border p-2.5']">
+        <p :class="[mainTextClass, 'mb-2 text-xs font-semibold']">Комментарии</p>
+        <form class="mb-2 space-y-1.5" @submit.prevent="submitComment">
+          <textarea
+            v-model="newCommentText"
+            rows="2"
+            placeholder="Добавьте комментарий..."
+            :class="[inputClass, 'w-full resize-y rounded-lg border px-2 py-1.5 text-xs outline-none']"
+          />
+          <div class="flex justify-end">
+            <button
+              type="submit"
+              :disabled="isCreatingComment || !newCommentText.trim()"
+              :class="
+                isLightTheme
+                  ? 'cursor-pointer rounded-lg border border-cyan-300/70 bg-cyan-100 px-2.5 py-1 text-[11px] font-semibold text-cyan-800 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-50'
+                  : 'cursor-pointer rounded-lg border border-cyan-300/30 bg-cyan-400/10 px-2.5 py-1 text-[11px] font-semibold text-cyan-200 transition hover:bg-cyan-400/20 disabled:cursor-not-allowed disabled:opacity-50'
+              "
+            >
+              {{ isCreatingComment ? 'Добавляю...' : 'Добавить' }}
+            </button>
+          </div>
+        </form>
+        <p v-if="isCommentsLoading" :class="[mutedTextClass, 'text-[11px]']">Загрузка комментариев...</p>
+        <p v-else-if="commentsError" class="text-[11px] text-rose-500">{{ commentsError }}</p>
+        <ul v-else-if="noteComments.length > 0" class="max-h-40 space-y-1.5 overflow-y-auto pr-1">
+          <li
+            v-for="comment in noteComments"
+            :key="comment.id"
+            :class="[inputClass, 'rounded-lg border px-2 py-1.5']"
+          >
+            <div v-if="editingCommentId !== comment.id" class="space-y-1">
+              <p :class="[mainTextClass, 'text-[11px] leading-relaxed']">{{ comment.text }}</p>
+              <div class="flex items-center justify-between gap-2">
+                <p :class="[mutedTextClass, 'text-[10px]']">{{ formatNoteDate(comment.createdAt) }}</p>
+                <div class="flex gap-1">
+                  <button
+                    type="button"
+                    :class="[neutralButtonClass, 'cursor-pointer rounded-md border px-2 py-0.5 text-[10px] transition']"
+                    @click="startEditComment(comment)"
+                  >
+                    Изм.
+                  </button>
+                  <button
+                    type="button"
+                    :disabled="isDeletingComment"
+                    :class="
+                      isLightTheme
+                        ? 'cursor-pointer rounded-md border border-rose-300/70 bg-rose-100 px-2 py-0.5 text-[10px] font-medium text-rose-700 transition hover:bg-rose-200 disabled:cursor-not-allowed disabled:opacity-50'
+                        : 'cursor-pointer rounded-md border border-rose-300/30 bg-rose-400/10 px-2 py-0.5 text-[10px] font-medium text-rose-200 transition hover:bg-rose-400/20 disabled:cursor-not-allowed disabled:opacity-50'
+                    "
+                    @click="removeComment(comment.id)"
+                  >
+                    Удал.
+                  </button>
+                </div>
+              </div>
+            </div>
+            <form v-else class="space-y-1.5" @submit.prevent="saveCommentEdit(comment.id)">
+              <textarea
+                v-model="editingCommentText"
+                rows="2"
+                :class="[inputClass, 'w-full resize-y rounded-md border px-2 py-1 text-[11px] outline-none']"
+              />
+              <div class="flex justify-end gap-1">
+                <button
+                  type="button"
+                  :class="[neutralButtonClass, 'cursor-pointer rounded-md border px-2 py-0.5 text-[10px] transition']"
+                  @click="cancelEditComment"
+                >
+                  Отмена
+                </button>
+                <button
+                  type="submit"
+                  :disabled="isUpdatingComment || !editingCommentText.trim()"
+                  :class="
+                    isLightTheme
+                      ? 'cursor-pointer rounded-md border border-cyan-300/70 bg-cyan-100 px-2 py-0.5 text-[10px] font-semibold text-cyan-800 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-50'
+                      : 'cursor-pointer rounded-md border border-cyan-300/30 bg-cyan-400/10 px-2 py-0.5 text-[10px] font-semibold text-cyan-200 transition hover:bg-cyan-400/20 disabled:cursor-not-allowed disabled:opacity-50'
+                  "
+                >
+                  {{ isUpdatingComment ? 'Сохр...' : 'Сохранить' }}
+                </button>
+              </div>
+            </form>
+          </li>
+        </ul>
+        <p v-else :class="[mutedTextClass, 'text-[11px]']">Комментариев пока нет.</p>
       </div>
 
       <div class="flex flex-wrap justify-end gap-1.5">

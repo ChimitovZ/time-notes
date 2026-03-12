@@ -22,6 +22,13 @@ type NoteVersionRow = {
   text: string
   created_at: string
 }
+type NoteCommentRow = {
+  id: number
+  note_id: number
+  text: string
+  created_at: string
+  updated_at: string
+}
 
 const app = Fastify({ logger: true })
 const port = Number(process.env.PORT ?? 3001)
@@ -44,6 +51,9 @@ const noteVersionParamsSchema = z.object({
   id: z.coerce.number().int().min(1),
   version: z.coerce.number().int().min(1),
 })
+const commentParamsSchema = z.object({
+  commentId: z.coerce.number().int().min(1),
+})
 const createGroupSchema = z.object({
   name: z.string().trim().min(1).max(120),
   noteIds: z.array(z.coerce.number().int().min(1)).min(1),
@@ -51,6 +61,19 @@ const createGroupSchema = z.object({
 const improveTextSchema = z.object({
   text: z.string().trim().min(1).max(4000),
 })
+const createCommentSchema = z.object({
+  text: z.string().trim().min(1).max(2000),
+})
+
+function mapComment(row: NoteCommentRow) {
+  return {
+    id: row.id,
+    noteId: row.note_id,
+    text: row.text,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }
+}
 
 app.get('/api/health', async () => ({ ok: true }))
 
@@ -339,6 +362,117 @@ app.post('/api/notes/:id/versions/:version/restore', async (request, reply) => {
     createdAt: current.created_at,
     version: nextVersion,
   }
+})
+
+app.get('/api/notes/:id/comments', async (request, reply) => {
+  const parsedParams = noteParamsSchema.safeParse(request.params)
+
+  if (!parsedParams.success) {
+    return reply.code(400).send({
+      message: 'Некорректный идентификатор заметки',
+      issues: parsedParams.error.issues,
+    })
+  }
+
+  const noteExists = db.prepare('SELECT id FROM notes WHERE id = ?').get(parsedParams.data.id)
+  if (!noteExists) {
+    return reply.code(404).send({ message: 'Заметка не найдена' })
+  }
+
+  const rows = db
+    .prepare(
+      `
+      SELECT id, note_id, text, created_at, updated_at
+      FROM note_comments
+      WHERE note_id = ?
+      ORDER BY datetime(created_at) DESC, id DESC
+    `,
+    )
+    .all(parsedParams.data.id) as NoteCommentRow[]
+
+  return rows.map(mapComment)
+})
+
+app.post('/api/notes/:id/comments', async (request, reply) => {
+  const parsedParams = noteParamsSchema.safeParse(request.params)
+  const parsedBody = createCommentSchema.safeParse(request.body)
+
+  if (!parsedParams.success || !parsedBody.success) {
+    return reply.code(400).send({
+      message: 'Некорректные данные комментария',
+      issues: [...(parsedParams.error?.issues ?? []), ...(parsedBody.error?.issues ?? [])],
+    })
+  }
+
+  const noteExists = db.prepare('SELECT id FROM notes WHERE id = ?').get(parsedParams.data.id)
+  if (!noteExists) {
+    return reply.code(404).send({ message: 'Заметка не найдена' })
+  }
+
+  const now = new Date().toISOString()
+  const result = db
+    .prepare('INSERT INTO note_comments (note_id, text, created_at, updated_at) VALUES (?, ?, ?, ?)')
+    .run(parsedParams.data.id, parsedBody.data.text, now, now)
+
+  const created = db
+    .prepare('SELECT id, note_id, text, created_at, updated_at FROM note_comments WHERE id = ?')
+    .get(Number(result.lastInsertRowid)) as NoteCommentRow | undefined
+
+  if (!created) {
+    return reply.code(500).send({ message: 'Комментарий не удалось создать' })
+  }
+
+  return reply.code(201).send(mapComment(created))
+})
+
+app.patch('/api/comments/:commentId', async (request, reply) => {
+  const parsedParams = commentParamsSchema.safeParse(request.params)
+  const parsedBody = createCommentSchema.safeParse(request.body)
+
+  if (!parsedParams.success || !parsedBody.success) {
+    return reply.code(400).send({
+      message: 'Некорректные данные комментария',
+      issues: [...(parsedParams.error?.issues ?? []), ...(parsedBody.error?.issues ?? [])],
+    })
+  }
+
+  const now = new Date().toISOString()
+  const result = db
+    .prepare('UPDATE note_comments SET text = ?, updated_at = ? WHERE id = ?')
+    .run(parsedBody.data.text, now, parsedParams.data.commentId)
+
+  if (result.changes === 0) {
+    return reply.code(404).send({ message: 'Комментарий не найден' })
+  }
+
+  const updated = db
+    .prepare('SELECT id, note_id, text, created_at, updated_at FROM note_comments WHERE id = ?')
+    .get(parsedParams.data.commentId) as NoteCommentRow | undefined
+
+  if (!updated) {
+    return reply.code(404).send({ message: 'Комментарий не найден' })
+  }
+
+  return mapComment(updated)
+})
+
+app.delete('/api/comments/:commentId', async (request, reply) => {
+  const parsedParams = commentParamsSchema.safeParse(request.params)
+
+  if (!parsedParams.success) {
+    return reply.code(400).send({
+      message: 'Некорректный идентификатор комментария',
+      issues: parsedParams.error.issues,
+    })
+  }
+
+  const result = db.prepare('DELETE FROM note_comments WHERE id = ?').run(parsedParams.data.commentId)
+
+  if (result.changes === 0) {
+    return reply.code(404).send({ message: 'Комментарий не найден' })
+  }
+
+  return reply.code(204).send()
 })
 
 app.delete('/api/notes/:id', async (request, reply) => {
