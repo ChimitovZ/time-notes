@@ -433,7 +433,6 @@ async function removeComment(commentId: number) {
   <section class="grid gap-4 sm:grid-cols-[1.15fr_0.85fr]">
     <NotesPanel
       :notes-per-page="notesPerPage"
-      :selected-notes-count="selectedNotesCount"
       :note-input="noteInput"
       :is-improving="isImproving"
       :is-creating="isCreating"

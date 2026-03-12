@@ -3,7 +3,6 @@ import type { Note } from '@/composables/useNotes'
 
 const props = defineProps<{
   notesPerPage: number
-  selectedNotesCount: number
   noteInput: string
   isImproving: boolean
   isCreating: boolean
