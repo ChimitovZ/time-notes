@@ -2,7 +2,7 @@ import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { useStorage } from '@vueuse/core'
 
-type ThemeMode = 'light' | 'graphite' | 'pastel' | 'crimson'
+export type ThemeMode = 'light' | 'graphite' | 'pastel' | 'crimson'
 type TimeDisplayMode = 'relative' | 'absolute'
 
 export const useUiStore = defineStore('ui', () => {
@@ -18,6 +18,10 @@ export const useUiStore = defineStore('ui', () => {
     themeMode.value = themeOrder[(currentIndex + 1) % themeOrder.length]
   }
 
+  function setTheme(theme: ThemeMode) {
+    themeMode.value = theme
+  }
+
   function toggleTimeDisplay() {
     timeDisplayMode.value = timeDisplayMode.value === 'relative' ? 'absolute' : 'relative'
   }
@@ -28,6 +32,7 @@ export const useUiStore = defineStore('ui', () => {
     notesPerPage,
     densityClass,
     toggleTheme,
+    setTheme,
     toggleTimeDisplay,
   }
 })
