@@ -64,6 +64,15 @@ const editingCommentText = ref('')
 
 const totalPages = computed(() => Math.max(1, Math.ceil(notesCount.value / notesPerPage.value)))
 const selectedNotesCount = computed(() => selectedNoteIds.value.length)
+const sortedNoteComments = computed(() =>
+  [...noteComments.value].sort((a, b) => {
+    const timeDiff = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    if (timeDiff !== 0) {
+      return timeDiff
+    }
+    return b.id - a.id
+  }),
+)
 const activeGroupName = computed(
   () => groups.value.find((group) => group.id === selectedGroupId.value)?.name ?? '',
 )
@@ -760,6 +769,7 @@ async function removeComment(commentId: number) {
             rows="2"
             placeholder="Добавьте комментарий..."
             :class="[inputClass, 'w-full resize-y rounded-lg border px-2 py-1.5 text-xs outline-none']"
+            @keydown.ctrl.enter.prevent="submitComment"
           />
           <div class="flex justify-end">
             <button
@@ -777,9 +787,9 @@ async function removeComment(commentId: number) {
         </form>
         <p v-if="isCommentsLoading" :class="[mutedTextClass, 'text-[11px]']">Загрузка комментариев...</p>
         <p v-else-if="commentsError" class="text-[11px] text-rose-500">{{ commentsError }}</p>
-        <ul v-else-if="noteComments.length > 0" class="max-h-40 space-y-1.5 overflow-y-auto pr-1">
+        <ul v-else-if="sortedNoteComments.length > 0" class="max-h-40 space-y-1.5 overflow-y-auto pr-1">
           <li
-            v-for="comment in noteComments"
+            v-for="comment in sortedNoteComments"
             :key="comment.id"
             :class="[inputClass, 'rounded-lg border px-2 py-1.5']"
           >
