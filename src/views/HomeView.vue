@@ -17,13 +17,11 @@ const {
   error,
   isCreating,
   isUpdating,
-  isDeleting,
   isImproving,
   isCreatingGroup,
   isGroupsLoading,
   createNote,
   updateNote,
-  deleteNote,
   improveText,
   createGroup,
   notesCount,
@@ -103,11 +101,6 @@ async function improveCreateText() {
   noteInput.value = await improveText(noteInput.value)
 }
 
-function startEdit(id: number, text: string) {
-  editingId.value = id
-  editingText.value = text
-}
-
 function cancelEdit() {
   editingId.value = null
   editingText.value = ''
@@ -120,18 +113,6 @@ async function saveEdit(id: number) {
 
 async function improveEditingText() {
   editingText.value = await improveText(editingText.value)
-}
-
-async function removeNote(id: number) {
-  if (!window.confirm('Удалить заметку?')) {
-    return
-  }
-
-  if (notes.value.length === 1 && currentPage.value > 1) {
-    currentPage.value -= 1
-  }
-  selectedNoteIds.value = selectedNoteIds.value.filter((item) => item !== id)
-  await deleteNote(id)
 }
 
 function goToPreviousPage() {
@@ -148,10 +129,10 @@ function toggleNoteSelection(noteId: number) {
     : [...selectedNoteIds.value, noteId]
 }
 
-function handleNoteCardClick(noteId: number, event: MouseEvent) {
+function handleNoteCardClick(note: Note, event: MouseEvent) {
   const target = event.target as HTMLElement | null
   if (!target) {
-    toggleNoteSelection(noteId)
+    openNoteModal(note)
     return
   }
 
@@ -159,7 +140,7 @@ function handleNoteCardClick(noteId: number, event: MouseEvent) {
     return
   }
 
-  toggleNoteSelection(noteId)
+  openNoteModal(note)
 }
 
 function toggleAllVisibleNotes(checked: boolean) {
@@ -309,7 +290,7 @@ async function saveModalNote() {
           <div
             v-if="editingId !== note.id"
             class="flex items-start justify-between gap-3"
-            @click="handleNoteCardClick(note.id, $event)"
+            @click="handleNoteCardClick(note, $event)"
           >
             <label class="mt-0.5 shrink-0">
               <input
@@ -336,27 +317,6 @@ async function saveModalNote() {
                 @click.stop="openNoteModal(note)"
               >
                 Открыть
-              </button>
-              <button
-                type="button"
-                :class="[
-                  neutralButtonClass,
-                  'cursor-pointer rounded-lg border px-2 py-1 text-[11px] transition',
-                ]"
-                @click.stop="startEdit(note.id, note.text)"
-              >
-                Изм.
-              </button>
-              <button
-                type="button"
-                :class="[
-                  neutralButtonClass,
-                  'cursor-pointer rounded-lg border px-2 py-1 text-[11px] transition',
-                ]"
-                :disabled="isDeleting"
-                @click.stop="removeNote(note.id)"
-              >
-                Удал.
               </button>
             </div>
           </div>
