@@ -331,6 +331,10 @@ function formatUiDate(value: string): string {
   return formatNoteDate(value, timeDisplayMode.value, now.value.getTime())
 }
 
+function formatAbsoluteDate(value: string): string {
+  return formatNoteDate(value, 'absolute')
+}
+
 function startEditComment(comment: NoteComment) {
   editingCommentId.value = comment.id
   editingCommentText.value = comment.text
@@ -475,7 +479,9 @@ async function removeComment(commentId: number) {
               <p :class="[mainTextClass, 'max-h-10 overflow-hidden text-sm font-medium']">
                 {{ note.text }}
               </p>
-              <p :class="[mutedTextClass, 'text-xs']">{{ formatUiDate(note.createdAt) }}</p>
+              <p :class="[mutedTextClass, 'text-xs']" :title="formatAbsoluteDate(note.createdAt)">
+                {{ formatUiDate(note.createdAt) }}
+              </p>
             </div>
             <div class="flex shrink-0 gap-1">
               <button
@@ -710,7 +716,9 @@ async function removeComment(commentId: number) {
       <div class="mb-3 flex items-start justify-between gap-3">
         <div>
           <h3 :class="[mainTextClass, 'text-base font-semibold']">Полная заметка</h3>
-          <p :class="[mutedTextClass, 'text-xs']">{{ formatUiDate(openedNote.createdAt) }}</p>
+          <p :class="[mutedTextClass, 'text-xs']" :title="formatAbsoluteDate(openedNote.createdAt)">
+            {{ formatUiDate(openedNote.createdAt) }}
+          </p>
           <p :class="[mutedTextClass, 'text-xs']">Текущая версия: v{{ openedNote.version }}</p>
         </div>
         <button
@@ -750,7 +758,10 @@ async function removeComment(commentId: number) {
           >
             <div class="min-w-0">
               <p :class="[mainTextClass, 'truncate text-[11px] font-medium']">{{ getVersionPreview(versionItem.text) }}</p>
-              <p :class="[mutedTextClass, 'truncate text-[10px]']">
+              <p
+                :class="[mutedTextClass, 'truncate text-[10px]']"
+                :title="formatAbsoluteDate(versionItem.createdAt)"
+              >
                 v{{ versionItem.version }} • {{ formatUiDate(versionItem.createdAt) }}
               </p>
             </div>
@@ -802,7 +813,9 @@ async function removeComment(commentId: number) {
             <div v-if="editingCommentId !== comment.id" class="space-y-1">
               <p :class="[mainTextClass, 'text-[11px] leading-relaxed']">{{ comment.text }}</p>
               <div class="flex items-center justify-between gap-2">
-                <p :class="[mutedTextClass, 'text-[10px]']">{{ formatUiDate(comment.createdAt) }}</p>
+                <p :class="[mutedTextClass, 'text-[10px]']" :title="formatAbsoluteDate(comment.createdAt)">
+                  {{ formatUiDate(comment.createdAt) }}
+                </p>
                 <div class="flex gap-1">
                   <button
                     type="button"
