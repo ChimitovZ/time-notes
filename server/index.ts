@@ -10,6 +10,12 @@ type NoteRow = {
   text: string
   created_at: string
 }
+type GroupRow = {
+  id: number
+  name: string
+  created_at: string
+  note_count: number
+}
 
 const app = Fastify({ logger: true })
 const port = Number(process.env.PORT ?? 3001)
@@ -23,9 +29,14 @@ const updateNoteSchema = createNoteSchema
 const listNotesQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
   offset: z.coerce.number().int().min(0).default(0),
+  groupId: z.coerce.number().int().min(1).optional(),
 })
 const noteParamsSchema = z.object({
   id: z.coerce.number().int().min(1),
+})
+const createGroupSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  noteIds: z.array(z.coerce.number().int().min(1)).min(1),
 })
 const improveTextSchema = z.object({
   text: z.string().trim().min(1).max(4000),
@@ -44,12 +55,32 @@ app.get('/api/notes', async (request, reply) => {
   }
 
   const { limit, offset } = parsedQuery.data
-  const rows = db
-    .prepare(
-      'SELECT id, text, created_at FROM notes ORDER BY datetime(created_at) DESC, id DESC LIMIT ? OFFSET ?',
-    )
-    .all(limit, offset) as NoteRow[]
-  const total = db.prepare('SELECT COUNT(*) as count FROM notes').get() as { count: number }
+  const rows =
+    parsedQuery.data.groupId === undefined
+      ? (db
+          .prepare(
+            'SELECT id, text, created_at FROM notes ORDER BY datetime(created_at) DESC, id DESC LIMIT ? OFFSET ?',
+          )
+          .all(limit, offset) as NoteRow[])
+      : (db
+          .prepare(
+            `
+            SELECT n.id, n.text, n.created_at
+            FROM notes n
+            INNER JOIN note_group_items ngi ON ngi.note_id = n.id
+            WHERE ngi.group_id = ?
+            ORDER BY datetime(n.created_at) DESC, n.id DESC
+            LIMIT ? OFFSET ?
+          `,
+          )
+          .all(parsedQuery.data.groupId, limit, offset) as NoteRow[])
+
+  const total =
+    parsedQuery.data.groupId === undefined
+      ? (db.prepare('SELECT COUNT(*) as count FROM notes').get() as { count: number })
+      : (db
+          .prepare('SELECT COUNT(*) as count FROM note_group_items WHERE group_id = ?')
+          .get(parsedQuery.data.groupId) as { count: number })
 
   return {
     items: rows.map((row) => ({
@@ -61,6 +92,70 @@ app.get('/api/notes', async (request, reply) => {
     limit,
     offset,
   }
+})
+
+app.get('/api/groups', async () => {
+  const rows = db
+    .prepare(
+      `
+      SELECT ng.id, ng.name, ng.created_at, COUNT(ngi.note_id) as note_count
+      FROM note_groups ng
+      LEFT JOIN note_group_items ngi ON ngi.group_id = ng.id
+      GROUP BY ng.id
+      ORDER BY datetime(ng.created_at) DESC, ng.id DESC
+    `,
+    )
+    .all() as GroupRow[]
+
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    createdAt: row.created_at,
+    noteCount: row.note_count,
+  }))
+})
+
+app.post('/api/groups', async (request, reply) => {
+  const parsed = createGroupSchema.safeParse(request.body)
+
+  if (!parsed.success) {
+    return reply.code(400).send({
+      message: 'Некорректные данные группы',
+      issues: parsed.error.issues,
+    })
+  }
+
+  const uniqueNoteIds = [...new Set(parsed.data.noteIds)]
+  const placeholders = uniqueNoteIds.map(() => '?').join(',')
+  const existing = db
+    .prepare(`SELECT COUNT(*) as count FROM notes WHERE id IN (${placeholders})`)
+    .get(...uniqueNoteIds) as { count: number }
+
+  if (existing.count !== uniqueNoteIds.length) {
+    return reply.code(400).send({ message: 'Некоторые заметки не найдены' })
+  }
+
+  const now = new Date().toISOString()
+  const trx = db.transaction(() => {
+    const insertGroup = db.prepare('INSERT INTO note_groups (name, created_at) VALUES (?, ?)')
+    const groupResult = insertGroup.run(parsed.data.name, now)
+    const groupId = Number(groupResult.lastInsertRowid)
+
+    const insertItem = db.prepare('INSERT INTO note_group_items (group_id, note_id) VALUES (?, ?)')
+    for (const noteId of uniqueNoteIds) {
+      insertItem.run(groupId, noteId)
+    }
+
+    return groupId
+  })
+
+  const groupId = trx()
+  return reply.code(201).send({
+    id: groupId,
+    name: parsed.data.name,
+    createdAt: now,
+    noteCount: uniqueNoteIds.length,
+  })
 })
 
 app.post('/api/notes', async (request, reply) => {
