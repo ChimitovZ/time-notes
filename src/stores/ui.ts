@@ -8,6 +8,7 @@ type TimeDisplayMode = 'relative' | 'absolute'
 export const useUiStore = defineStore('ui', () => {
   const themeMode = useStorage<ThemeMode>('ui:theme-mode', 'light')
   const timeDisplayMode = useStorage<TimeDisplayMode>('ui:time-display-mode', 'relative')
+  const showNoteDiffs = useStorage<boolean>('ui:show-note-diffs', false)
   const notesPerPage = ref(8)
 
   const densityClass = computed(() => 'py-2')
@@ -26,13 +27,19 @@ export const useUiStore = defineStore('ui', () => {
     timeDisplayMode.value = timeDisplayMode.value === 'relative' ? 'absolute' : 'relative'
   }
 
+  function toggleNoteDiffs() {
+    showNoteDiffs.value = !showNoteDiffs.value
+  }
+
   return {
     themeMode,
     timeDisplayMode,
+    showNoteDiffs,
     notesPerPage,
     densityClass,
     toggleTheme,
     setTheme,
     toggleTimeDisplay,
+    toggleNoteDiffs,
   }
 })

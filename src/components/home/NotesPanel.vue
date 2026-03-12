@@ -25,6 +25,7 @@ const props = defineProps<{
   primaryButtonClass: string
   aiButtonClass: string
   isAllVisibleSelected: boolean
+  showNoteDiffs: boolean
   currentPage: number
   totalPages: number
   isUpdating: boolean
@@ -39,10 +40,12 @@ const props = defineProps<{
   onCancelEdit: () => void
   onImproveEditingText: () => void
   onToggleAllVisibleNotes: (checked: boolean) => void
+  onToggleNoteDiffs: () => void
   onPrevPage: () => void
   onNextPage: () => void
   formatUiDate: (value: string) => string
   formatAbsoluteDate: (value: string) => string
+  getNoteGapLabel: (index: number) => string
 }>()
 
 function handleNoteCardClick(note: Note, event: MouseEvent) {
@@ -74,18 +77,27 @@ function handleEditingInput(event: Event) {
   <article class="theme-surface rounded-2xl border p-3 sm:p-4">
     <div class="mb-3 flex items-center justify-between">
       <h2 class="text-sm font-semibold sm:text-base">Последние заметки</h2>
-      <p :class="[mutedTextClass, 'text-[11px]']">Выбрано: {{ selectedNotesCount }}</p>
-      <label :class="[mutedTextClass, 'flex items-center gap-2 text-xs']">
-        <span>Показывать</span>
-        <input
-          :value="notesPerPage"
-          type="number"
-          min="4"
-          max="20"
-          :class="[inputClass, 'w-14 rounded-lg border px-2 py-1 outline-none']"
-          @input="handleNotesPerPageInput"
-        />
-      </label>
+      <div class="flex items-center gap-2">
+        <p :class="[mutedTextClass, 'text-[11px]']">Выбрано: {{ selectedNotesCount }}</p>
+        <label :class="[mutedTextClass, 'flex items-center gap-2 text-xs']">
+          <span>Показывать</span>
+          <input
+            :value="notesPerPage"
+            type="number"
+            min="4"
+            max="20"
+            :class="[inputClass, 'w-14 rounded-lg border px-2 py-1 outline-none']"
+            @input="handleNotesPerPageInput"
+          />
+        </label>
+        <button
+          type="button"
+          :class="[neutralButtonClass, 'cursor-pointer rounded-lg border px-2 py-1 text-[11px] transition']"
+          @click="onToggleNoteDiffs"
+        >
+          {{ showNoteDiffs ? 'Скрыть разницу' : 'Показывать разницу' }}
+        </button>
+      </div>
     </div>
 
     <form class="mb-3 space-y-2" @submit.prevent="onSubmitNote">
@@ -123,11 +135,8 @@ function handleEditingInput(event: Event) {
     </div>
 
     <ul v-else-if="notes.length > 0" class="space-y-2">
-      <li
-        v-for="note in notes"
-        :key="note.id"
-        :class="['rounded-xl border px-3 transition cursor-pointer', noteCardClass, densityClass]"
-      >
+      <template v-for="(note, index) in notes" :key="note.id">
+      <li :class="['rounded-xl border px-3 transition cursor-pointer', noteCardClass, densityClass]">
         <div
           v-if="editingId !== note.id"
           class="flex items-start justify-between gap-3"
@@ -196,6 +205,15 @@ function handleEditingInput(event: Event) {
           </div>
         </form>
       </li>
+      <li
+        v-if="showNoteDiffs && index < notes.length - 1"
+        :key="`gap-${note.id}`"
+        :class="[subtleSurfaceClass, 'rounded-lg border px-2 py-1 text-[11px]']"
+      >
+        <span :class="mutedTextClass">Прошло:</span>
+        <span :class="[mainTextClass, 'ml-1 font-medium']">{{ getNoteGapLabel(index) }}</span>
+      </li>
+      </template>
     </ul>
     <div v-else :class="[subtleSurfaceClass, 'rounded-xl border px-3 py-2 text-xs']">
       Пока нет заметок. Добавьте первую запись выше.

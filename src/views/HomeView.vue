@@ -16,7 +16,7 @@ import SidebarPanel from '@/components/home/SidebarPanel.vue'
 import { useUiStore } from '@/stores/ui'
 
 const uiStore = useUiStore()
-const { notesPerPage, densityClass, timeDisplayMode } = storeToRefs(uiStore)
+const { notesPerPage, densityClass, timeDisplayMode, showNoteDiffs } = storeToRefs(uiStore)
 const currentPage = ref(1)
 const selectedGroupId = ref<number | null>(null)
 const {
@@ -354,6 +354,34 @@ function formatAbsoluteDate(value: string): string {
   return formatNoteDate(value, 'absolute')
 }
 
+function formatGapBetweenNotes(newerDate: string, olderDate: string): string {
+  const newer = new Date(newerDate).getTime()
+  const older = new Date(olderDate).getTime()
+  if (Number.isNaN(newer) || Number.isNaN(older)) return 'н/д'
+
+  const diffMs = Math.max(0, newer - older)
+  const totalMinutes = Math.floor(diffMs / 60_000)
+  if (totalMinutes < 1) return 'меньше минуты'
+
+  const days = Math.floor(totalMinutes / (60 * 24))
+  const hours = Math.floor((totalMinutes % (60 * 24)) / 60)
+  const minutes = totalMinutes % 60
+  const parts: string[] = []
+
+  if (days > 0) parts.push(`${days}д`)
+  if (hours > 0) parts.push(`${hours}ч`)
+  if (minutes > 0) parts.push(`${minutes}м`)
+
+  return parts.join(' ')
+}
+
+function getNoteGapLabel(index: number): string {
+  const newer = notes.value[index]
+  const older = notes.value[index + 1]
+  if (!newer || !older) return ''
+  return formatGapBetweenNotes(newer.createdAt, older.createdAt)
+}
+
 function startEditComment(comment: NoteComment) {
   editingCommentId.value = comment.id
   editingCommentText.value = comment.text
@@ -427,6 +455,7 @@ async function removeComment(commentId: number) {
       :primary-button-class="primaryButtonClass"
       :ai-button-class="aiButtonClass"
       :is-all-visible-selected="isAllVisibleSelected"
+      :show-note-diffs="showNoteDiffs"
       :current-page="currentPage"
       :total-pages="totalPages"
       :is-updating="isUpdating"
@@ -441,10 +470,12 @@ async function removeComment(commentId: number) {
       :on-cancel-edit="cancelEdit"
       :on-improve-editing-text="improveEditingText"
       :on-toggle-all-visible-notes="toggleAllVisibleNotes"
+      :on-toggle-note-diffs="uiStore.toggleNoteDiffs"
       :on-prev-page="goToPreviousPage"
       :on-next-page="goToNextPage"
       :format-ui-date="formatUiDate"
       :format-absolute-date="formatAbsoluteDate"
+      :get-note-gap-label="getNoteGapLabel"
     />
 
     <SidebarPanel
