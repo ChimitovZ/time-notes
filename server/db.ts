@@ -24,6 +24,18 @@ const notesColumns = db
 if (!notesColumns.some((column) => column.name === 'version')) {
   db.exec('ALTER TABLE notes ADD COLUMN version INTEGER NOT NULL DEFAULT 1')
 }
+if (!notesColumns.some((column) => column.name === 'user_id')) {
+  db.exec('ALTER TABLE notes ADD COLUMN user_id INTEGER')
+}
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  )
+`)
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS note_versions (
@@ -47,6 +59,12 @@ db.exec(`
     FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE CASCADE
   )
 `)
+const commentsColumns = db
+  .prepare("SELECT name FROM pragma_table_info('note_comments')")
+  .all() as Array<{ name: string }>
+if (!commentsColumns.some((column) => column.name === 'user_id')) {
+  db.exec('ALTER TABLE note_comments ADD COLUMN user_id INTEGER')
+}
 
 db.exec(`
   CREATE INDEX IF NOT EXISTS idx_note_comments_note_id_created_at
@@ -60,6 +78,12 @@ db.exec(`
     created_at TEXT NOT NULL
   )
 `)
+const groupsColumns = db
+  .prepare("SELECT name FROM pragma_table_info('note_groups')")
+  .all() as Array<{ name: string }>
+if (!groupsColumns.some((column) => column.name === 'user_id')) {
+  db.exec('ALTER TABLE note_groups ADD COLUMN user_id INTEGER')
+}
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS note_group_items (

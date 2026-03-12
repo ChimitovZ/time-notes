@@ -1,6 +1,9 @@
-import Fastify from 'fastify'
+import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify'
 import cors from '@fastify/cors'
+import cookie from '@fastify/cookie'
+import session from '@fastify/session'
 import { z } from 'zod'
+import argon2 from 'argon2'
 
 import { improveTextWithAi } from './ai'
 import { db } from './db'
@@ -10,12 +13,14 @@ type NoteRow = {
   text: string
   created_at: string
   version: number
+  user_id?: number | null
 }
 type GroupRow = {
   id: number
   name: string
   created_at: string
   note_count: number
+  user_id?: number | null
 }
 type NoteVersionRow = {
   version: number
@@ -28,12 +33,35 @@ type NoteCommentRow = {
   text: string
   created_at: string
   updated_at: string
+  user_id: number | null
+}
+type UserRow = {
+  id: number
+  email: string
+  password_hash: string
+  created_at: string
+}
+
+declare module 'fastify' {
+  interface Session {
+    userId?: number
+  }
 }
 
 const app = Fastify({ logger: true })
 const port = Number(process.env.PORT ?? 3001)
 
-await app.register(cors, { origin: true })
+await app.register(cors, { origin: true, credentials: true })
+await app.register(cookie)
+await app.register(session, {
+  secret: process.env.SESSION_SECRET ?? 'dev-session-secret-change-me-0123456789',
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    sameSite: 'lax',
+    maxAge: 1000 * 60 * 60 * 24 * 7,
+  },
+})
 
 const createNoteSchema = z.object({
   text: z.string().trim().min(1).max(4000),
@@ -67,6 +95,24 @@ const improveTextSchema = z.object({
 const createCommentSchema = z.object({
   text: z.string().trim().min(1).max(2000),
 })
+const registerSchema = z.object({
+  email: z.string().email().trim().max(160),
+  password: z.string().min(8).max(128),
+})
+const loginSchema = registerSchema
+
+function getUserId(request: FastifyRequest): number | null {
+  return request.session.userId ?? null
+}
+
+function requireAuth(request: FastifyRequest, reply: FastifyReply): number | null {
+  if (!request.session.userId) {
+    reply.code(401).send({ message: 'Требуется авторизация' })
+    return null
+  }
+
+  return request.session.userId
+}
 
 function mapComment(row: NoteCommentRow) {
   return {
@@ -80,7 +126,76 @@ function mapComment(row: NoteCommentRow) {
 
 app.get('/api/health', async () => ({ ok: true }))
 
+app.get('/api/auth/me', async (request, reply) => {
+  const userId = getUserId(request)
+  if (!userId) {
+    return reply.code(401).send({ message: 'Не авторизован' })
+  }
+
+  const user = db.prepare('SELECT id, email, created_at, password_hash FROM users WHERE id = ?').get(userId) as
+    | UserRow
+    | undefined
+  if (!user) {
+    request.session.userId = undefined
+    return reply.code(401).send({ message: 'Не авторизован' })
+  }
+
+  return { id: user.id, email: user.email, createdAt: user.created_at }
+})
+
+app.post('/api/auth/register', async (request, reply) => {
+  const parsed = registerSchema.safeParse(request.body)
+  if (!parsed.success) {
+    return reply.code(400).send({ message: 'Некорректные данные регистрации', issues: parsed.error.issues })
+  }
+
+  const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(parsed.data.email)
+  if (existing) {
+    return reply.code(409).send({ message: 'Пользователь с таким email уже существует' })
+  }
+
+  const now = new Date().toISOString()
+  const passwordHash = await argon2.hash(parsed.data.password)
+  const result = db
+    .prepare('INSERT INTO users (email, password_hash, created_at) VALUES (?, ?, ?)')
+    .run(parsed.data.email, passwordHash, now)
+  const userId = Number(result.lastInsertRowid)
+  request.session.userId = userId
+
+  return reply.code(201).send({ id: userId, email: parsed.data.email, createdAt: now })
+})
+
+app.post('/api/auth/login', async (request, reply) => {
+  const parsed = loginSchema.safeParse(request.body)
+  if (!parsed.success) {
+    return reply.code(400).send({ message: 'Некорректные данные входа', issues: parsed.error.issues })
+  }
+
+  const user = db.prepare('SELECT id, email, password_hash, created_at FROM users WHERE email = ?').get(parsed.data.email) as
+    | UserRow
+    | undefined
+  if (!user) {
+    return reply.code(401).send({ message: 'Неверный email или пароль' })
+  }
+
+  const ok = await argon2.verify(user.password_hash, parsed.data.password)
+  if (!ok) {
+    return reply.code(401).send({ message: 'Неверный email или пароль' })
+  }
+
+  request.session.userId = user.id
+  return { id: user.id, email: user.email, createdAt: user.created_at }
+})
+
+app.post('/api/auth/logout', async (request) => {
+  request.session.userId = undefined
+  return { ok: true }
+})
+
 app.get('/api/notes', async (request, reply) => {
+  const userId = requireAuth(request, reply)
+  if (!userId) return
+
   const parsedQuery = listNotesQuerySchema.safeParse(request.query)
 
   if (!parsedQuery.success) {
@@ -95,28 +210,39 @@ app.get('/api/notes', async (request, reply) => {
     parsedQuery.data.groupId === undefined
       ? (db
           .prepare(
-            'SELECT id, text, created_at, version FROM notes ORDER BY datetime(created_at) DESC, id DESC LIMIT ? OFFSET ?',
+            'SELECT id, text, created_at, version FROM notes WHERE user_id = ? ORDER BY datetime(created_at) DESC, id DESC LIMIT ? OFFSET ?',
           )
-          .all(limit, offset) as NoteRow[])
+          .all(userId, limit, offset) as NoteRow[])
       : (db
           .prepare(
             `
             SELECT n.id, n.text, n.created_at, n.version
             FROM notes n
             INNER JOIN note_group_items ngi ON ngi.note_id = n.id
+            INNER JOIN note_groups ng ON ng.id = ngi.group_id
             WHERE ngi.group_id = ?
+            AND n.user_id = ?
+            AND ng.user_id = ?
             ORDER BY datetime(n.created_at) DESC, n.id DESC
             LIMIT ? OFFSET ?
           `,
           )
-          .all(parsedQuery.data.groupId, limit, offset) as NoteRow[])
+          .all(parsedQuery.data.groupId, userId, userId, limit, offset) as NoteRow[])
 
   const total =
     parsedQuery.data.groupId === undefined
-      ? (db.prepare('SELECT COUNT(*) as count FROM notes').get() as { count: number })
+      ? (db.prepare('SELECT COUNT(*) as count FROM notes WHERE user_id = ?').get(userId) as { count: number })
       : (db
-          .prepare('SELECT COUNT(*) as count FROM note_group_items WHERE group_id = ?')
-          .get(parsedQuery.data.groupId) as { count: number })
+          .prepare(
+            `
+            SELECT COUNT(*) as count
+            FROM note_group_items ngi
+            INNER JOIN note_groups ng ON ng.id = ngi.group_id
+            INNER JOIN notes n ON n.id = ngi.note_id
+            WHERE ngi.group_id = ? AND ng.user_id = ? AND n.user_id = ?
+          `,
+          )
+          .get(parsedQuery.data.groupId, userId, userId) as { count: number })
 
   return {
     items: rows.map((row) => ({
@@ -131,18 +257,22 @@ app.get('/api/notes', async (request, reply) => {
   }
 })
 
-app.get('/api/groups', async () => {
+app.get('/api/groups', async (request, reply) => {
+  const userId = requireAuth(request, reply)
+  if (!userId) return
+
   const rows = db
     .prepare(
       `
       SELECT ng.id, ng.name, ng.created_at, COUNT(ngi.note_id) as note_count
       FROM note_groups ng
       LEFT JOIN note_group_items ngi ON ngi.group_id = ng.id
+      WHERE ng.user_id = ?
       GROUP BY ng.id
       ORDER BY datetime(ng.created_at) DESC, ng.id DESC
     `,
     )
-    .all() as GroupRow[]
+    .all(userId) as GroupRow[]
 
   return rows.map((row) => ({
     id: row.id,
@@ -153,6 +283,9 @@ app.get('/api/groups', async () => {
 })
 
 app.post('/api/groups', async (request, reply) => {
+  const userId = requireAuth(request, reply)
+  if (!userId) return
+
   const parsed = createGroupSchema.safeParse(request.body)
 
   if (!parsed.success) {
@@ -163,10 +296,13 @@ app.post('/api/groups', async (request, reply) => {
   }
 
   const uniqueNoteIds = [...new Set(parsed.data.noteIds)]
+  if (uniqueNoteIds.length === 0) {
+    return reply.code(400).send({ message: 'Нужно выбрать хотя бы одну заметку' })
+  }
   const placeholders = uniqueNoteIds.map(() => '?').join(',')
   const existing = db
-    .prepare(`SELECT COUNT(*) as count FROM notes WHERE id IN (${placeholders})`)
-    .get(...uniqueNoteIds) as { count: number }
+    .prepare(`SELECT COUNT(*) as count FROM notes WHERE user_id = ? AND id IN (${placeholders})`)
+    .get(userId, ...uniqueNoteIds) as { count: number }
 
   if (existing.count !== uniqueNoteIds.length) {
     return reply.code(400).send({ message: 'Некоторые заметки не найдены' })
@@ -174,8 +310,8 @@ app.post('/api/groups', async (request, reply) => {
 
   const now = new Date().toISOString()
   const trx = db.transaction(() => {
-    const insertGroup = db.prepare('INSERT INTO note_groups (name, created_at) VALUES (?, ?)')
-    const groupResult = insertGroup.run(parsed.data.name, now)
+    const insertGroup = db.prepare('INSERT INTO note_groups (name, created_at, user_id) VALUES (?, ?, ?)')
+    const groupResult = insertGroup.run(parsed.data.name, now, userId)
     const groupId = Number(groupResult.lastInsertRowid)
 
     const insertItem = db.prepare('INSERT INTO note_group_items (group_id, note_id) VALUES (?, ?)')
@@ -196,6 +332,9 @@ app.post('/api/groups', async (request, reply) => {
 })
 
 app.delete('/api/groups/:id', async (request, reply) => {
+  const userId = requireAuth(request, reply)
+  if (!userId) return
+
   const parsedParams = groupParamsSchema.safeParse(request.params)
 
   if (!parsedParams.success) {
@@ -205,7 +344,7 @@ app.delete('/api/groups/:id', async (request, reply) => {
     })
   }
 
-  const result = db.prepare('DELETE FROM note_groups WHERE id = ?').run(parsedParams.data.id)
+  const result = db.prepare('DELETE FROM note_groups WHERE id = ? AND user_id = ?').run(parsedParams.data.id, userId)
 
   if (result.changes === 0) {
     return reply.code(404).send({ message: 'Группа не найдена' })
@@ -215,6 +354,9 @@ app.delete('/api/groups/:id', async (request, reply) => {
 })
 
 app.post('/api/notes', async (request, reply) => {
+  const userId = requireAuth(request, reply)
+  if (!userId) return
+
   const parsed = createNoteSchema.safeParse(request.body)
 
   if (!parsed.success) {
@@ -226,7 +368,9 @@ app.post('/api/notes', async (request, reply) => {
 
   const now = new Date().toISOString()
   const trx = db.transaction(() => {
-    const noteResult = db.prepare('INSERT INTO notes (text, created_at, version) VALUES (?, ?, 1)').run(parsed.data.text, now)
+    const noteResult = db
+      .prepare('INSERT INTO notes (text, created_at, version, user_id) VALUES (?, ?, 1, ?)')
+      .run(parsed.data.text, now, userId)
     const noteId = Number(noteResult.lastInsertRowid)
     db.prepare('INSERT INTO note_versions (note_id, version, text, created_at) VALUES (?, ?, ?, ?)').run(
       noteId,
@@ -247,6 +391,9 @@ app.post('/api/notes', async (request, reply) => {
 })
 
 app.post('/api/ai/improve', async (request, reply) => {
+  const userId = requireAuth(request, reply)
+  if (!userId) return
+
   const parsed = improveTextSchema.safeParse(request.body)
 
   if (!parsed.success) {
@@ -261,6 +408,9 @@ app.post('/api/ai/improve', async (request, reply) => {
 })
 
 app.patch('/api/notes/:id', async (request, reply) => {
+  const userId = requireAuth(request, reply)
+  if (!userId) return
+
   const parsedParams = noteParamsSchema.safeParse(request.params)
   const parsedBody = updateNoteSchema.safeParse(request.body)
 
@@ -272,8 +422,8 @@ app.patch('/api/notes/:id', async (request, reply) => {
   }
 
   const current = db
-    .prepare('SELECT id, text, created_at, version FROM notes WHERE id = ?')
-    .get(parsedParams.data.id) as NoteRow | undefined
+    .prepare('SELECT id, text, created_at, version, user_id FROM notes WHERE id = ? AND user_id = ?')
+    .get(parsedParams.data.id, userId) as NoteRow | undefined
 
   if (!current) {
     return reply.code(404).send({ message: 'Заметка не найдена' })
@@ -307,6 +457,9 @@ app.patch('/api/notes/:id', async (request, reply) => {
 })
 
 app.get('/api/notes/:id/versions', async (request, reply) => {
+  const userId = requireAuth(request, reply)
+  if (!userId) return
+
   const parsedParams = noteParamsSchema.safeParse(request.params)
 
   if (!parsedParams.success) {
@@ -316,7 +469,7 @@ app.get('/api/notes/:id/versions', async (request, reply) => {
     })
   }
 
-  const noteExists = db.prepare('SELECT id FROM notes WHERE id = ?').get(parsedParams.data.id)
+  const noteExists = db.prepare('SELECT id FROM notes WHERE id = ? AND user_id = ?').get(parsedParams.data.id, userId)
   if (!noteExists) {
     return reply.code(404).send({ message: 'Заметка не найдена' })
   }
@@ -335,6 +488,9 @@ app.get('/api/notes/:id/versions', async (request, reply) => {
 })
 
 app.post('/api/notes/:id/versions/:version/restore', async (request, reply) => {
+  const userId = requireAuth(request, reply)
+  if (!userId) return
+
   const parsedParams = noteVersionParamsSchema.safeParse(request.params)
 
   if (!parsedParams.success) {
@@ -345,7 +501,7 @@ app.post('/api/notes/:id/versions/:version/restore', async (request, reply) => {
   }
 
   const { id, version } = parsedParams.data
-  const current = db.prepare('SELECT id, text, created_at, version FROM notes WHERE id = ?').get(id) as
+  const current = db.prepare('SELECT id, text, created_at, version, user_id FROM notes WHERE id = ? AND user_id = ?').get(id, userId) as
     | NoteRow
     | undefined
   if (!current) {
@@ -387,6 +543,9 @@ app.post('/api/notes/:id/versions/:version/restore', async (request, reply) => {
 })
 
 app.get('/api/notes/:id/comments', async (request, reply) => {
+  const userId = requireAuth(request, reply)
+  if (!userId) return
+
   const parsedParams = noteParamsSchema.safeParse(request.params)
 
   if (!parsedParams.success) {
@@ -396,7 +555,7 @@ app.get('/api/notes/:id/comments', async (request, reply) => {
     })
   }
 
-  const noteExists = db.prepare('SELECT id FROM notes WHERE id = ?').get(parsedParams.data.id)
+  const noteExists = db.prepare('SELECT id FROM notes WHERE id = ? AND user_id = ?').get(parsedParams.data.id, userId)
   if (!noteExists) {
     return reply.code(404).send({ message: 'Заметка не найдена' })
   }
@@ -404,18 +563,21 @@ app.get('/api/notes/:id/comments', async (request, reply) => {
   const rows = db
     .prepare(
       `
-      SELECT id, note_id, text, created_at, updated_at
+      SELECT id, note_id, text, created_at, updated_at, user_id
       FROM note_comments
-      WHERE note_id = ?
+      WHERE note_id = ? AND user_id = ?
       ORDER BY datetime(created_at) DESC, id DESC
     `,
     )
-    .all(parsedParams.data.id) as NoteCommentRow[]
+    .all(parsedParams.data.id, userId) as NoteCommentRow[]
 
   return rows.map(mapComment)
 })
 
 app.post('/api/notes/:id/comments', async (request, reply) => {
+  const userId = requireAuth(request, reply)
+  if (!userId) return
+
   const parsedParams = noteParamsSchema.safeParse(request.params)
   const parsedBody = createCommentSchema.safeParse(request.body)
 
@@ -426,19 +588,19 @@ app.post('/api/notes/:id/comments', async (request, reply) => {
     })
   }
 
-  const noteExists = db.prepare('SELECT id FROM notes WHERE id = ?').get(parsedParams.data.id)
+  const noteExists = db.prepare('SELECT id FROM notes WHERE id = ? AND user_id = ?').get(parsedParams.data.id, userId)
   if (!noteExists) {
     return reply.code(404).send({ message: 'Заметка не найдена' })
   }
 
   const now = new Date().toISOString()
   const result = db
-    .prepare('INSERT INTO note_comments (note_id, text, created_at, updated_at) VALUES (?, ?, ?, ?)')
-    .run(parsedParams.data.id, parsedBody.data.text, now, now)
+    .prepare('INSERT INTO note_comments (note_id, text, created_at, updated_at, user_id) VALUES (?, ?, ?, ?, ?)')
+    .run(parsedParams.data.id, parsedBody.data.text, now, now, userId)
 
   const created = db
-    .prepare('SELECT id, note_id, text, created_at, updated_at FROM note_comments WHERE id = ?')
-    .get(Number(result.lastInsertRowid)) as NoteCommentRow | undefined
+    .prepare('SELECT id, note_id, text, created_at, updated_at, user_id FROM note_comments WHERE id = ? AND user_id = ?')
+    .get(Number(result.lastInsertRowid), userId) as NoteCommentRow | undefined
 
   if (!created) {
     return reply.code(500).send({ message: 'Комментарий не удалось создать' })
@@ -448,6 +610,9 @@ app.post('/api/notes/:id/comments', async (request, reply) => {
 })
 
 app.patch('/api/comments/:commentId', async (request, reply) => {
+  const userId = requireAuth(request, reply)
+  if (!userId) return
+
   const parsedParams = commentParamsSchema.safeParse(request.params)
   const parsedBody = createCommentSchema.safeParse(request.body)
 
@@ -460,16 +625,16 @@ app.patch('/api/comments/:commentId', async (request, reply) => {
 
   const now = new Date().toISOString()
   const result = db
-    .prepare('UPDATE note_comments SET text = ?, updated_at = ? WHERE id = ?')
-    .run(parsedBody.data.text, now, parsedParams.data.commentId)
+    .prepare('UPDATE note_comments SET text = ?, updated_at = ? WHERE id = ? AND user_id = ?')
+    .run(parsedBody.data.text, now, parsedParams.data.commentId, userId)
 
   if (result.changes === 0) {
     return reply.code(404).send({ message: 'Комментарий не найден' })
   }
 
   const updated = db
-    .prepare('SELECT id, note_id, text, created_at, updated_at FROM note_comments WHERE id = ?')
-    .get(parsedParams.data.commentId) as NoteCommentRow | undefined
+    .prepare('SELECT id, note_id, text, created_at, updated_at, user_id FROM note_comments WHERE id = ? AND user_id = ?')
+    .get(parsedParams.data.commentId, userId) as NoteCommentRow | undefined
 
   if (!updated) {
     return reply.code(404).send({ message: 'Комментарий не найден' })
@@ -479,6 +644,9 @@ app.patch('/api/comments/:commentId', async (request, reply) => {
 })
 
 app.delete('/api/comments/:commentId', async (request, reply) => {
+  const userId = requireAuth(request, reply)
+  if (!userId) return
+
   const parsedParams = commentParamsSchema.safeParse(request.params)
 
   if (!parsedParams.success) {
@@ -488,7 +656,7 @@ app.delete('/api/comments/:commentId', async (request, reply) => {
     })
   }
 
-  const result = db.prepare('DELETE FROM note_comments WHERE id = ?').run(parsedParams.data.commentId)
+  const result = db.prepare('DELETE FROM note_comments WHERE id = ? AND user_id = ?').run(parsedParams.data.commentId, userId)
 
   if (result.changes === 0) {
     return reply.code(404).send({ message: 'Комментарий не найден' })
@@ -498,6 +666,9 @@ app.delete('/api/comments/:commentId', async (request, reply) => {
 })
 
 app.delete('/api/notes/:id', async (request, reply) => {
+  const userId = requireAuth(request, reply)
+  if (!userId) return
+
   const parsedParams = noteParamsSchema.safeParse(request.params)
 
   if (!parsedParams.success) {
@@ -507,7 +678,7 @@ app.delete('/api/notes/:id', async (request, reply) => {
     })
   }
 
-  const result = db.prepare('DELETE FROM notes WHERE id = ?').run(parsedParams.data.id)
+  const result = db.prepare('DELETE FROM notes WHERE id = ? AND user_id = ?').run(parsedParams.data.id, userId)
 
   if (result.changes === 0) {
     return reply.code(404).send({ message: 'Заметка не найдена' })
