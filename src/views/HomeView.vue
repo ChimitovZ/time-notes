@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 
-import { formatNoteDate, useNotes } from '@/composables/useNotes'
+import { formatNoteDate, useNotes, type Note } from '@/composables/useNotes'
 import { useUiStore } from '@/stores/ui'
 
 const uiStore = useUiStore()
@@ -34,6 +34,8 @@ const editingId = ref<number | null>(null)
 const editingText = ref('')
 const selectedNoteIds = ref<number[]>([])
 const groupNameInput = ref('')
+const openedNote = ref<Note | null>(null)
+const modalText = ref('')
 
 const totalPages = computed(() => Math.max(1, Math.ceil(notesCount.value / notesPerPage.value)))
 const selectedNotesCount = computed(() => selectedNoteIds.value.length)
@@ -43,7 +45,9 @@ const activeGroupName = computed(
 const isLightTheme = computed(() => themeMode.value === 'light')
 
 const surfaceClass = computed(() =>
-  isLightTheme.value ? 'border-slate-200 bg-white text-slate-900' : 'border-white/10 bg-white/5 text-slate-100',
+  isLightTheme.value
+    ? 'border-slate-200 bg-white text-slate-900'
+    : 'border-white/10 bg-white/5 text-slate-100',
 )
 const subtleSurfaceClass = computed(() =>
   isLightTheme.value
@@ -66,12 +70,19 @@ const neutralButtonClass = computed(() =>
     : 'border-white/15 text-slate-300 hover:border-white/30',
 )
 const checkboxClass = computed(() =>
-  isLightTheme.value ? 'size-3.5 cursor-pointer accent-cyan-500' : 'size-3.5 cursor-pointer accent-cyan-400',
+  isLightTheme.value
+    ? 'size-3.5 cursor-pointer accent-cyan-500'
+    : 'size-3.5 cursor-pointer accent-cyan-400',
 )
 const selectedGroupButtonClass = computed(() =>
   isLightTheme.value
     ? 'border-cyan-300/60 bg-cyan-50 text-cyan-700'
     : 'border-cyan-300/40 bg-cyan-400/10 text-cyan-200',
+)
+const modalSurfaceClass = computed(() =>
+  isLightTheme.value
+    ? 'border-slate-200 bg-white text-slate-900'
+    : 'border-zinc-700 bg-zinc-900 text-slate-100',
 )
 
 watch(notesPerPage, () => {
@@ -153,7 +164,9 @@ function handleNoteCardClick(noteId: number, event: MouseEvent) {
 
 function toggleAllVisibleNotes(checked: boolean) {
   if (checked) {
-    selectedNoteIds.value = [...new Set([...selectedNoteIds.value, ...notes.value.map((note) => note.id)])]
+    selectedNoteIds.value = [
+      ...new Set([...selectedNoteIds.value, ...notes.value.map((note) => note.id)]),
+    ]
     return
   }
 
@@ -189,6 +202,29 @@ function clearSelection() {
 function switchGroup(groupId: number | null) {
   selectedGroupId.value = groupId
 }
+
+function openNoteModal(note: Note) {
+  openedNote.value = note
+  modalText.value = note.text
+}
+
+function closeNoteModal() {
+  openedNote.value = null
+  modalText.value = ''
+}
+
+async function improveModalText() {
+  modalText.value = await improveText(modalText.value)
+}
+
+async function saveModalNote() {
+  if (!openedNote.value) {
+    return
+  }
+
+  await updateNote({ id: openedNote.value.id, text: modalText.value })
+  closeNoteModal()
+}
 </script>
 
 <template>
@@ -214,10 +250,15 @@ function switchGroup(groupId: number | null) {
           v-model="noteInput"
           rows="3"
           placeholder="Введите заметку..."
-          :class="[inputClass, 'w-full resize-none rounded-xl border px-3 py-2 text-sm outline-none transition']"
+          :class="[
+            inputClass,
+            'w-full resize-none rounded-xl border px-3 py-2 text-sm outline-none transition',
+          ]"
           @keydown.ctrl.enter.prevent="submitNote"
         />
-        <p :class="[mutedTextClass, 'text-[11px]']">Подсказка: нажмите Ctrl+Enter, чтобы быстро сохранить заметку.</p>
+        <p :class="[mutedTextClass, 'text-[11px]']">
+          Подсказка: нажмите Ctrl+Enter, чтобы быстро сохранить заметку.
+        </p>
         <div class="flex flex-wrap gap-1.5">
           <button
             type="button"
@@ -263,13 +304,13 @@ function switchGroup(groupId: number | null) {
         <li
           v-for="note in notes"
           :key="note.id"
-          :class="[
-            'rounded-xl border px-3 transition cursor-pointer',
-            noteCardClass,
-            densityClass,
-          ]"
+          :class="['rounded-xl border px-3 transition cursor-pointer', noteCardClass, densityClass]"
         >
-          <div v-if="editingId !== note.id" class="flex items-start justify-between gap-3" @click="handleNoteCardClick(note.id, $event)">
+          <div
+            v-if="editingId !== note.id"
+            class="flex items-start justify-between gap-3"
+            @click="handleNoteCardClick(note.id, $event)"
+          >
             <label class="mt-0.5 shrink-0">
               <input
                 :checked="selectedNoteIds.includes(note.id)"
@@ -288,14 +329,30 @@ function switchGroup(groupId: number | null) {
             <div class="flex shrink-0 gap-1">
               <button
                 type="button"
-                :class="[neutralButtonClass, 'cursor-pointer rounded-lg border px-2 py-1 text-[11px] transition']"
+                :class="[
+                  neutralButtonClass,
+                  'cursor-pointer rounded-lg border px-2 py-1 text-[11px] transition',
+                ]"
+                @click.stop="openNoteModal(note)"
+              >
+                Открыть
+              </button>
+              <button
+                type="button"
+                :class="[
+                  neutralButtonClass,
+                  'cursor-pointer rounded-lg border px-2 py-1 text-[11px] transition',
+                ]"
                 @click.stop="startEdit(note.id, note.text)"
               >
                 Изм.
               </button>
               <button
                 type="button"
-                :class="[neutralButtonClass, 'cursor-pointer rounded-lg border px-2 py-1 text-[11px] transition']"
+                :class="[
+                  neutralButtonClass,
+                  'cursor-pointer rounded-lg border px-2 py-1 text-[11px] transition',
+                ]"
                 :disabled="isDeleting"
                 @click.stop="removeNote(note.id)"
               >
@@ -307,10 +364,15 @@ function switchGroup(groupId: number | null) {
             <textarea
               v-model="editingText"
               rows="3"
-              :class="[inputClass, 'w-full resize-none rounded-lg border px-2 py-1.5 text-sm outline-none']"
+              :class="[
+                inputClass,
+                'w-full resize-none rounded-lg border px-2 py-1.5 text-sm outline-none',
+              ]"
               @keydown.ctrl.enter.prevent="saveEdit(note.id)"
             />
-            <p :class="[mutedTextClass, 'text-[11px]']">Подсказка: Ctrl+Enter сохраняет изменения.</p>
+            <p :class="[mutedTextClass, 'text-[11px]']">
+              Подсказка: Ctrl+Enter сохраняет изменения.
+            </p>
             <div class="flex justify-end gap-1">
               <button
                 type="button"
@@ -326,7 +388,10 @@ function switchGroup(groupId: number | null) {
               </button>
               <button
                 type="button"
-                :class="[neutralButtonClass, 'cursor-pointer rounded-lg border px-2 py-1 text-[11px] transition']"
+                :class="[
+                  neutralButtonClass,
+                  'cursor-pointer rounded-lg border px-2 py-1 text-[11px] transition',
+                ]"
                 @click="cancelEdit"
               >
                 Отмена
@@ -350,7 +415,10 @@ function switchGroup(groupId: number | null) {
         Пока нет заметок. Добавьте первую запись выше.
       </div>
 
-      <div v-if="notes.length > 0" :class="[mutedTextClass, 'mt-2 flex items-center gap-2 text-[11px]']">
+      <div
+        v-if="notes.length > 0"
+        :class="[mutedTextClass, 'mt-2 flex items-center gap-2 text-[11px]']"
+      >
         <input
           :checked="isAllVisibleSelected"
           type="checkbox"
@@ -365,7 +433,10 @@ function switchGroup(groupId: number | null) {
         <div class="flex gap-1">
           <button
             type="button"
-            :class="[neutralButtonClass, 'cursor-pointer rounded-lg border px-2 py-1 transition disabled:cursor-not-allowed disabled:opacity-50']"
+            :class="[
+              neutralButtonClass,
+              'cursor-pointer rounded-lg border px-2 py-1 transition disabled:cursor-not-allowed disabled:opacity-50',
+            ]"
             :disabled="currentPage <= 1 || isLoading"
             @click="goToPreviousPage"
           >
@@ -373,7 +444,10 @@ function switchGroup(groupId: number | null) {
           </button>
           <button
             type="button"
-            :class="[neutralButtonClass, 'cursor-pointer rounded-lg border px-2 py-1 transition disabled:cursor-not-allowed disabled:opacity-50']"
+            :class="[
+              neutralButtonClass,
+              'cursor-pointer rounded-lg border px-2 py-1 transition disabled:cursor-not-allowed disabled:opacity-50',
+            ]"
             :disabled="currentPage >= totalPages || isLoading"
             @click="goToNextPage"
           >
@@ -393,7 +467,13 @@ function switchGroup(groupId: number | null) {
               : 'rounded-xl border border-cyan-400/30 bg-cyan-400/10 px-3 py-3 text-left'
           "
         >
-          <p :class="isLightTheme ? 'text-2xl font-semibold text-cyan-700' : 'text-2xl font-semibold text-cyan-200'">
+          <p
+            :class="
+              isLightTheme
+                ? 'text-2xl font-semibold text-cyan-700'
+                : 'text-2xl font-semibold text-cyan-200'
+            "
+          >
             {{ notesCount }}
           </p>
           <p :class="isLightTheme ? 'text-xs text-cyan-700/80' : 'text-xs text-cyan-100/80'">
@@ -421,7 +501,10 @@ function switchGroup(groupId: number | null) {
               v-model="groupNameInput"
               type="text"
               placeholder="Название группы"
-              :class="[inputClass, 'min-w-44 flex-1 rounded-lg border px-2 py-1.5 text-xs outline-none']"
+              :class="[
+                inputClass,
+                'min-w-44 flex-1 rounded-lg border px-2 py-1.5 text-xs outline-none',
+              ]"
             />
             <button
               type="button"
@@ -483,4 +566,73 @@ function switchGroup(groupId: number | null) {
       </article>
     </aside>
   </section>
+
+  <div
+    v-if="openedNote"
+    :class="
+      isLightTheme
+        ? 'fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4'
+        : 'fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4'
+    "
+    @click.self="closeNoteModal"
+  >
+    <div :class="[modalSurfaceClass, 'w-full max-w-2xl rounded-2xl border p-4 shadow-xl']">
+      <div class="mb-3 flex items-start justify-between gap-3">
+        <div>
+          <h3 :class="[mainTextClass, 'text-base font-semibold']">Полная заметка</h3>
+          <p :class="[mutedTextClass, 'text-xs']">{{ formatNoteDate(openedNote.createdAt) }}</p>
+        </div>
+        <button
+          type="button"
+          :class="[
+            neutralButtonClass,
+            'cursor-pointer rounded-lg border px-2 py-1 text-[11px] transition',
+          ]"
+          @click="closeNoteModal"
+        >
+          Закрыть
+        </button>
+      </div>
+
+      <textarea
+        v-model="modalText"
+        rows="10"
+        :class="[
+          inputClass,
+          'mb-2 w-full resize-y rounded-xl border px-3 py-2 text-sm outline-none',
+        ]"
+        @keydown.ctrl.enter.prevent="saveModalNote"
+      />
+      <p :class="[mutedTextClass, 'mb-2 text-[11px]']">
+        Подсказка: Ctrl+Enter сохраняет изменения в заметке.
+      </p>
+
+      <div class="flex flex-wrap justify-end gap-1.5">
+        <button
+          type="button"
+          :disabled="isImproving || !modalText.trim()"
+          :class="
+            isLightTheme
+              ? 'cursor-pointer rounded-xl border border-violet-300/70 bg-violet-100 px-3 py-1.5 text-xs font-semibold text-violet-800 transition hover:bg-violet-200 disabled:cursor-not-allowed disabled:opacity-50'
+              : 'cursor-pointer rounded-xl border border-violet-300/30 bg-violet-400/10 px-3 py-1.5 text-xs font-semibold text-violet-200 transition hover:bg-violet-400/20 disabled:cursor-not-allowed disabled:opacity-50'
+          "
+          @click="improveModalText"
+        >
+          {{ isImproving ? 'Улучшаю...' : 'Улучшить ИИ' }}
+        </button>
+        <button
+          type="button"
+          :disabled="isUpdating || !modalText.trim()"
+          :class="
+            isLightTheme
+              ? 'cursor-pointer rounded-xl border border-cyan-300/70 bg-cyan-100 px-3 py-1.5 text-xs font-semibold text-cyan-800 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-50'
+              : 'cursor-pointer rounded-xl border border-cyan-300/30 bg-cyan-400/10 px-3 py-1.5 text-xs font-semibold text-cyan-200 transition hover:bg-cyan-400/20 disabled:cursor-not-allowed disabled:opacity-50'
+          "
+          @click="saveModalNote"
+        >
+          {{ isUpdating ? 'Сохр...' : 'Сохранить' }}
+        </button>
+      </div>
+    </div>
+  </div>
 </template>
