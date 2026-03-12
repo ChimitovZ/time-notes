@@ -35,6 +35,7 @@ const {
   createNote,
   updateNote,
   deleteNote,
+  toggleNoteStar,
   improveText,
   createGroup,
   deleteGroup,
@@ -48,6 +49,7 @@ const {
   isCreatingComment,
   isUpdatingComment,
   isDeletingComment,
+  isTogglingStar,
   notesCount,
 } = useNotes(notesPerPage, currentPage, selectedGroupId)
 
@@ -282,6 +284,15 @@ async function deleteModalNote() {
   closeNoteModal()
 }
 
+async function toggleStar(note: Note) {
+  const updated = await toggleNoteStar({ id: note.id, starred: !note.starred })
+
+  if (openedNote.value?.id === updated.id) {
+    openedNote.value = updated
+    modalText.value = updated.text
+  }
+}
+
 async function loadNoteVersions(noteId: number) {
   isVersionsLoading.value = true
   versionsError.value = ''
@@ -458,12 +469,14 @@ async function removeComment(commentId: number) {
       :current-page="currentPage"
       :total-pages="totalPages"
       :is-updating="isUpdating"
+      :is-toggling-star="isTogglingStar"
       :on-notes-per-page-change="setNotesPerPage"
       :on-note-input-change="setNoteInput"
       :on-submit-note="submitNote"
       :on-improve-create-text="improveCreateText"
       :on-toggle-note-selection="toggleNoteSelection"
       :on-open-note="openNoteModal"
+      :on-toggle-star="toggleStar"
       :on-editing-text-change="setEditingText"
       :on-save-edit="saveEdit"
       :on-cancel-edit="cancelEdit"
@@ -524,6 +537,7 @@ async function removeComment(commentId: number) {
     :is-improving="isImproving"
     :is-updating="isUpdating"
     :is-restoring-version="isRestoringVersion"
+    :is-toggling-star="isTogglingStar"
     :is-creating-comment="isCreatingComment"
     :is-updating-comment="isUpdatingComment"
     :is-deleting-comment="isDeletingComment"
@@ -543,6 +557,7 @@ async function removeComment(commentId: number) {
     :on-close="closeNoteModal"
     :on-modal-text-change="setModalText"
     :on-save="saveModalNote"
+    :on-toggle-star="toggleStar"
     :on-improve="improveModalText"
     :on-delete="deleteModalNote"
     :on-toggle-versions-panel="toggleVersionsPanel"

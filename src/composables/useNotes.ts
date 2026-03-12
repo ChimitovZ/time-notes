@@ -9,6 +9,7 @@ const noteSchema = z.object({
   text: z.string(),
   createdAt: z.string(),
   version: z.number().int().min(1),
+  starred: z.boolean().default(false),
 })
 const groupSchema = z.object({
   id: z.number(),
@@ -109,6 +110,17 @@ async function updateNote(payload: { id: number; text: string }): Promise<Note> 
   }
 
   const response = await http.patch(`/notes/${payload.id}`, parsedInput.data)
+  const parsedOutput = noteSchema.safeParse(response.data)
+
+  if (!parsedOutput.success) {
+    throw new Error('Сервер вернул данные в неверном формате')
+  }
+
+  return parsedOutput.data
+}
+
+async function toggleNoteStar(payload: { id: number; starred: boolean }): Promise<Note> {
+  const response = await http.patch(`/notes/${payload.id}/star`, { starred: payload.starred })
   const parsedOutput = noteSchema.safeParse(response.data)
 
   if (!parsedOutput.success) {
@@ -319,6 +331,12 @@ export function useNotes(
       await queryClient.invalidateQueries({ queryKey: ['groups'] })
     },
   })
+  const toggleStarMutation = useMutation({
+    mutationFn: toggleNoteStar,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['notes'] })
+    },
+  })
   const improveMutation = useMutation({
     mutationFn: improveText,
   })
@@ -362,6 +380,7 @@ export function useNotes(
     createNote: createMutation.mutateAsync,
     updateNote: updateMutation.mutateAsync,
     deleteNote: deleteMutation.mutateAsync,
+    toggleNoteStar: toggleStarMutation.mutateAsync,
     improveText: improveMutation.mutateAsync,
     createGroup: createGroupMutation.mutateAsync,
     deleteGroup: deleteGroupMutation.mutateAsync,
@@ -374,6 +393,7 @@ export function useNotes(
     isCreating: createMutation.isPending,
     isUpdating: updateMutation.isPending,
     isDeleting: deleteMutation.isPending,
+    isTogglingStar: toggleStarMutation.isPending,
     isImproving: improveMutation.isPending,
     isCreatingGroup: createGroupMutation.isPending,
     isDeletingGroup: deleteGroupMutation.isPending,

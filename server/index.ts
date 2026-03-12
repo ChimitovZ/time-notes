@@ -13,6 +13,7 @@ type NoteRow = {
   text: string
   created_at: string
   version: number
+  starred?: number
   user_id?: number | null
 }
 type GroupRow = {
@@ -67,6 +68,9 @@ const createNoteSchema = z.object({
   text: z.string().trim().min(1).max(4000),
 })
 const updateNoteSchema = createNoteSchema
+const toggleStarSchema = z.object({
+  starred: z.boolean(),
+})
 const listNotesQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
   offset: z.coerce.number().int().min(0).default(0),
@@ -210,13 +214,13 @@ app.get('/api/notes', async (request, reply) => {
     parsedQuery.data.groupId === undefined
       ? (db
           .prepare(
-            'SELECT id, text, created_at, version FROM notes WHERE user_id = ? ORDER BY datetime(created_at) DESC, id DESC LIMIT ? OFFSET ?',
+            'SELECT id, text, created_at, version, starred FROM notes WHERE user_id = ? ORDER BY datetime(created_at) DESC, id DESC LIMIT ? OFFSET ?',
           )
           .all(userId, limit, offset) as NoteRow[])
       : (db
           .prepare(
             `
-            SELECT n.id, n.text, n.created_at, n.version
+            SELECT n.id, n.text, n.created_at, n.version, n.starred
             FROM notes n
             INNER JOIN note_group_items ngi ON ngi.note_id = n.id
             INNER JOIN note_groups ng ON ng.id = ngi.group_id
@@ -250,6 +254,7 @@ app.get('/api/notes', async (request, reply) => {
       text: row.text,
       createdAt: row.created_at,
       version: row.version,
+      starred: Boolean(row.starred),
     })),
     total: total.count,
     limit,
@@ -369,7 +374,7 @@ app.post('/api/notes', async (request, reply) => {
   const now = new Date().toISOString()
   const trx = db.transaction(() => {
     const noteResult = db
-      .prepare('INSERT INTO notes (text, created_at, version, user_id) VALUES (?, ?, 1, ?)')
+      .prepare('INSERT INTO notes (text, created_at, version, starred, user_id) VALUES (?, ?, 1, 0, ?)')
       .run(parsed.data.text, now, userId)
     const noteId = Number(noteResult.lastInsertRowid)
     db.prepare('INSERT INTO note_versions (note_id, version, text, created_at) VALUES (?, ?, ?, ?)').run(
@@ -387,6 +392,7 @@ app.post('/api/notes', async (request, reply) => {
     text: parsed.data.text,
     createdAt: now,
     version: 1,
+    starred: false,
   })
 })
 
@@ -422,7 +428,7 @@ app.patch('/api/notes/:id', async (request, reply) => {
   }
 
   const current = db
-    .prepare('SELECT id, text, created_at, version, user_id FROM notes WHERE id = ? AND user_id = ?')
+    .prepare('SELECT id, text, created_at, version, starred, user_id FROM notes WHERE id = ? AND user_id = ?')
     .get(parsedParams.data.id, userId) as NoteRow | undefined
 
   if (!current) {
@@ -453,6 +459,45 @@ app.patch('/api/notes/:id', async (request, reply) => {
     text: parsedBody.data.text,
     createdAt: current.created_at,
     version: nextVersion,
+    starred: Boolean(current.starred),
+  }
+})
+
+app.patch('/api/notes/:id/star', async (request, reply) => {
+  const userId = requireAuth(request, reply)
+  if (!userId) return
+
+  const parsedParams = noteParamsSchema.safeParse(request.params)
+  const parsedBody = toggleStarSchema.safeParse(request.body)
+
+  if (!parsedParams.success || !parsedBody.success) {
+    return reply.code(400).send({
+      message: 'Некорректные данные для обновления избранного',
+      issues: [...(parsedParams.error?.issues ?? []), ...(parsedBody.error?.issues ?? [])],
+    })
+  }
+
+  const result = db
+    .prepare('UPDATE notes SET starred = ? WHERE id = ? AND user_id = ?')
+    .run(parsedBody.data.starred ? 1 : 0, parsedParams.data.id, userId)
+
+  if (result.changes === 0) {
+    return reply.code(404).send({ message: 'Заметка не найдена' })
+  }
+
+  const updated = db
+    .prepare('SELECT id, text, created_at, version, starred FROM notes WHERE id = ? AND user_id = ?')
+    .get(parsedParams.data.id, userId) as NoteRow | undefined
+  if (!updated) {
+    return reply.code(404).send({ message: 'Заметка не найдена' })
+  }
+
+  return {
+    id: updated.id,
+    text: updated.text,
+    createdAt: updated.created_at,
+    version: updated.version,
+    starred: Boolean(updated.starred),
   }
 })
 
@@ -501,7 +546,7 @@ app.post('/api/notes/:id/versions/:version/restore', async (request, reply) => {
   }
 
   const { id, version } = parsedParams.data
-  const current = db.prepare('SELECT id, text, created_at, version, user_id FROM notes WHERE id = ? AND user_id = ?').get(id, userId) as
+  const current = db.prepare('SELECT id, text, created_at, version, starred, user_id FROM notes WHERE id = ? AND user_id = ?').get(id, userId) as
     | NoteRow
     | undefined
   if (!current) {
@@ -539,6 +584,7 @@ app.post('/api/notes/:id/versions/:version/restore', async (request, reply) => {
     text: target.text,
     createdAt: current.created_at,
     version: nextVersion,
+    starred: Boolean(current.starred),
   }
 })
 

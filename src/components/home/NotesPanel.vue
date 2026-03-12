@@ -28,12 +28,14 @@ const props = defineProps<{
   currentPage: number
   totalPages: number
   isUpdating: boolean
+  isTogglingStar: boolean
   onNotesPerPageChange: (value: number) => void
   onNoteInputChange: (value: string) => void
   onSubmitNote: () => void
   onImproveCreateText: () => void
   onToggleNoteSelection: (noteId: number) => void
   onOpenNote: (note: Note) => void
+  onToggleStar: (note: Note) => void
   onEditingTextChange: (value: string) => void
   onSaveEdit: (id: number) => void
   onCancelEdit: () => void
@@ -134,7 +136,14 @@ function handleEditingInput(event: Event) {
 
     <ul v-else-if="notes.length > 0" class="space-y-2">
       <template v-for="(note, index) in notes" :key="note.id">
-      <li :class="['rounded-xl border px-3 transition cursor-pointer', noteCardClass, densityClass]">
+      <li
+        :class="[
+          'rounded-xl border px-3 transition cursor-pointer',
+          noteCardClass,
+          densityClass,
+          note.starred ? 'theme-btn-selected' : '',
+        ]"
+      >
         <div
           v-if="editingId !== note.id"
           class="flex items-start justify-between gap-3"
@@ -151,13 +160,24 @@ function handleEditingInput(event: Event) {
           </label>
           <div class="min-w-0 flex-1 text-left">
             <p :class="[mainTextClass, 'max-h-10 overflow-hidden text-sm font-medium']">
-              {{ note.text }}
+              <span v-if="note.starred" class="mr-1">★</span>{{ note.text }}
             </p>
             <p :class="[mutedTextClass, 'text-xs']" :title="formatAbsoluteDate(note.createdAt)">
               {{ formatUiDate(note.createdAt) }}
             </p>
           </div>
           <div class="flex shrink-0 gap-1">
+            <button
+              type="button"
+              :disabled="isTogglingStar"
+              :class="[
+                note.starred ? 'theme-btn-selected' : neutralButtonClass,
+                'cursor-pointer rounded-lg border px-2 py-1 text-[11px] transition disabled:cursor-not-allowed disabled:opacity-50',
+              ]"
+              @click.stop="onToggleStar(note)"
+            >
+              {{ note.starred ? '★' : '☆' }}
+            </button>
             <button
               type="button"
               :class="[neutralButtonClass, 'cursor-pointer rounded-lg border px-2 py-1 text-[11px] transition']"

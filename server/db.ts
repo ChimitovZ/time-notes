@@ -24,6 +24,9 @@ const notesColumns = db
 if (!notesColumns.some((column) => column.name === 'version')) {
   db.exec('ALTER TABLE notes ADD COLUMN version INTEGER NOT NULL DEFAULT 1')
 }
+if (!notesColumns.some((column) => column.name === 'starred')) {
+  db.exec('ALTER TABLE notes ADD COLUMN starred INTEGER NOT NULL DEFAULT 0')
+}
 if (!notesColumns.some((column) => column.name === 'user_id')) {
   db.exec('ALTER TABLE notes ADD COLUMN user_id INTEGER')
 }

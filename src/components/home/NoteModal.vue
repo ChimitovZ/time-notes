@@ -17,6 +17,7 @@ defineProps<{
   isDeleting: boolean
   isImproving: boolean
   isUpdating: boolean
+  isTogglingStar: boolean
   isRestoringVersion: boolean
   isCreatingComment: boolean
   isUpdatingComment: boolean
@@ -37,6 +38,7 @@ defineProps<{
   onClose: () => void
   onModalTextChange: (value: string) => void
   onSave: () => void
+  onToggleStar: (note: Note) => void
   onImprove: () => void
   onDelete: () => void
   onToggleVersionsPanel: () => void
@@ -66,13 +68,26 @@ defineProps<{
           </p>
           <p :class="[mutedTextClass, 'text-xs']">Текущая версия: v{{ openedNote.version }}</p>
         </div>
-        <button
-          type="button"
-          :class="[neutralButtonClass, 'cursor-pointer rounded-lg border px-2 py-1 text-[11px] transition']"
-          @click="onClose"
-        >
-          Закрыть
-        </button>
+        <div class="flex gap-1">
+          <button
+            type="button"
+            :disabled="isTogglingStar"
+            :class="[
+              openedNote.starred ? 'theme-btn-selected' : neutralButtonClass,
+              'cursor-pointer rounded-lg border px-2 py-1 text-[11px] transition disabled:cursor-not-allowed disabled:opacity-50',
+            ]"
+            @click="onToggleStar(openedNote)"
+          >
+            {{ openedNote.starred ? '★ В избранном' : '☆ В избранное' }}
+          </button>
+          <button
+            type="button"
+            :class="[neutralButtonClass, 'cursor-pointer rounded-lg border px-2 py-1 text-[11px] transition']"
+            @click="onClose"
+          >
+            Закрыть
+          </button>
+        </div>
       </div>
 
       <div class="grid gap-3 lg:grid-cols-[minmax(0,1fr)_280px]">
