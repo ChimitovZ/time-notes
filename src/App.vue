@@ -21,6 +21,12 @@ const shellClass = computed(() => 'theme-shell')
 const headerClass = computed(() => 'theme-header')
 const authCardClass = computed(() => 'theme-surface')
 const authInputClass = computed(() => 'theme-input')
+const themeLabel = computed(() => {
+  if (themeMode.value === 'light') return 'Тема: Light'
+  if (themeMode.value === 'graphite') return 'Тема: Graphite'
+  if (themeMode.value === 'pastel') return 'Тема: Pastel'
+  return 'Тема: Crimson'
+})
 
 onMounted(() => {
   void authStore.bootstrap()
@@ -73,13 +79,7 @@ async function logout() {
             :class="actionButtonClass"
             @click="uiStore.toggleTheme"
           >
-            {{
-              themeMode === 'light'
-                ? 'Тема: Light'
-                : themeMode === 'pastel'
-                  ? 'Тема: Pastel'
-                  : 'Тема: Graphite'
-            }}
+            {{ themeLabel }}
           </button>
           <button
             type="button"
