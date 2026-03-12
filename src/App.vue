@@ -8,13 +8,19 @@ const uiStore = useUiStore()
 const { themeMode, timeDisplayMode } = storeToRefs(uiStore)
 
 const shellClass = computed(() =>
-  themeMode.value === 'light' ? 'bg-slate-50 text-slate-900' : 'bg-zinc-900 text-zinc-100',
+  themeMode.value === 'light'
+    ? 'bg-slate-50 text-slate-900'
+    : themeMode.value === 'pastel'
+      ? 'bg-[#fff6fb] text-[#5f4b70]'
+      : 'bg-zinc-900 text-zinc-100',
 )
 
 const headerClass = computed(() =>
   themeMode.value === 'light'
     ? 'border-slate-200 bg-white'
-    : 'border-zinc-700/80 bg-zinc-800/60',
+    : themeMode.value === 'pastel'
+      ? 'border-[#cdb4db]/70 bg-[#fff9fd]'
+      : 'border-zinc-700/80 bg-zinc-800/60',
 )
 </script>
 
@@ -34,11 +40,19 @@ const headerClass = computed(() =>
             :class="
               themeMode === 'light'
                 ? 'border-slate-300 text-slate-700 hover:border-cyan-400/50 hover:bg-cyan-50'
-                : 'border-white/15 text-zinc-100 hover:border-cyan-300/40 hover:bg-cyan-400/10'
+                : themeMode === 'pastel'
+                  ? 'border-[#cdb4db]/80 text-[#6b557c] hover:border-[#a2d2ff] hover:bg-[#f2f8ff]'
+                  : 'border-white/15 text-zinc-100 hover:border-cyan-300/40 hover:bg-cyan-400/10'
             "
             @click="uiStore.toggleTheme"
           >
-            {{ themeMode === 'light' ? 'Тема: Light' : 'Тема: Graphite' }}
+            {{
+              themeMode === 'light'
+                ? 'Тема: Light'
+                : themeMode === 'pastel'
+                  ? 'Тема: Pastel'
+                  : 'Тема: Graphite'
+            }}
           </button>
           <button
             type="button"
@@ -46,7 +60,9 @@ const headerClass = computed(() =>
             :class="
               themeMode === 'light'
                 ? 'border-slate-300 text-slate-700 hover:border-cyan-400/50 hover:bg-cyan-50'
-                : 'border-white/15 text-zinc-100 hover:border-cyan-300/40 hover:bg-cyan-400/10'
+                : themeMode === 'pastel'
+                  ? 'border-[#cdb4db]/80 text-[#6b557c] hover:border-[#a2d2ff] hover:bg-[#f2f8ff]'
+                  : 'border-white/15 text-zinc-100 hover:border-cyan-300/40 hover:bg-cyan-400/10'
             "
             @click="uiStore.toggleTimeDisplay"
           >

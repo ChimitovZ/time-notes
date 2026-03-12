@@ -77,47 +77,71 @@ const sortedNoteComments = computed(() =>
 const activeGroupName = computed(
   () => groups.value.find((group) => group.id === selectedGroupId.value)?.name ?? '',
 )
-const isLightTheme = computed(() => themeMode.value === 'light')
+const isGraphiteTheme = computed(() => themeMode.value === 'graphite')
+const isPastelTheme = computed(() => themeMode.value === 'pastel')
+const isLightTheme = computed(() => !isGraphiteTheme.value)
 
 const surfaceClass = computed(() =>
-  isLightTheme.value
-    ? 'border-slate-200 bg-white text-slate-900'
-    : 'border-white/10 bg-white/5 text-slate-100',
+  isGraphiteTheme.value
+    ? 'border-white/10 bg-white/5 text-slate-100'
+    : isPastelTheme.value
+      ? 'border-[#cdb4db]/70 bg-[#fff9fd] text-[#5f4b70]'
+      : 'border-slate-200 bg-white text-slate-900',
 )
 const subtleSurfaceClass = computed(() =>
-  isLightTheme.value
-    ? 'border-slate-200 bg-slate-50 text-slate-700'
-    : 'border-white/10 bg-slate-900/40 text-slate-400',
+  isGraphiteTheme.value
+    ? 'border-white/10 bg-slate-900/40 text-slate-400'
+    : isPastelTheme.value
+      ? 'border-[#ffc8dd]/70 bg-[#fff1f8] text-[#7e638f]'
+      : 'border-slate-200 bg-slate-50 text-slate-700',
 )
 const inputClass = computed(() =>
-  isLightTheme.value
-    ? 'border-slate-300 bg-white text-slate-900 placeholder:text-slate-400 focus:border-cyan-500/60'
-    : 'border-white/10 bg-slate-900 text-slate-100 placeholder:text-slate-500 focus:border-cyan-300/50',
+  isGraphiteTheme.value
+    ? 'border-white/10 bg-slate-900 text-slate-100 placeholder:text-slate-500 focus:border-cyan-300/50'
+    : isPastelTheme.value
+      ? 'border-[#cdb4db]/70 bg-white text-[#5f4b70] placeholder:text-[#aa93b7] focus:border-[#a2d2ff]'
+      : 'border-slate-300 bg-white text-slate-900 placeholder:text-slate-400 focus:border-cyan-500/60',
 )
 const noteCardClass = computed(() =>
-  isLightTheme.value ? 'border-slate-200 bg-slate-50/70' : 'border-white/10 bg-slate-900/60',
+  isGraphiteTheme.value
+    ? 'border-white/10 bg-slate-900/60'
+    : isPastelTheme.value
+      ? 'border-[#ffc8dd]/70 bg-[#fff7fb]'
+      : 'border-slate-200 bg-slate-50/70',
 )
-const mutedTextClass = computed(() => (isLightTheme.value ? 'text-slate-500' : 'text-slate-400'))
-const mainTextClass = computed(() => (isLightTheme.value ? 'text-slate-900' : 'text-slate-100'))
+const mutedTextClass = computed(() =>
+  isGraphiteTheme.value ? 'text-slate-400' : isPastelTheme.value ? 'text-[#8e739f]' : 'text-slate-500',
+)
+const mainTextClass = computed(() =>
+  isGraphiteTheme.value ? 'text-slate-100' : isPastelTheme.value ? 'text-[#5f4b70]' : 'text-slate-900',
+)
 const neutralButtonClass = computed(() =>
-  isLightTheme.value
-    ? 'border-slate-300 text-slate-700 hover:border-slate-400'
-    : 'border-white/15 text-slate-300 hover:border-white/30',
+  isGraphiteTheme.value
+    ? 'border-white/15 text-slate-300 hover:border-white/30'
+    : isPastelTheme.value
+      ? 'border-[#cdb4db]/80 text-[#6d577e] hover:border-[#a2d2ff] hover:bg-[#f2f8ff]'
+      : 'border-slate-300 text-slate-700 hover:border-slate-400',
 )
 const checkboxClass = computed(() =>
-  isLightTheme.value
-    ? 'size-3.5 cursor-pointer accent-cyan-500'
-    : 'size-3.5 cursor-pointer accent-cyan-400',
+  isGraphiteTheme.value
+    ? 'size-3.5 cursor-pointer accent-cyan-400'
+    : isPastelTheme.value
+      ? 'size-3.5 cursor-pointer accent-[#a2d2ff]'
+      : 'size-3.5 cursor-pointer accent-cyan-500',
 )
 const selectedGroupButtonClass = computed(() =>
-  isLightTheme.value
-    ? 'border-cyan-300/60 bg-cyan-50 text-cyan-700'
-    : 'border-cyan-300/40 bg-cyan-400/10 text-cyan-200',
+  isGraphiteTheme.value
+    ? 'border-cyan-300/40 bg-cyan-400/10 text-cyan-200'
+    : isPastelTheme.value
+      ? 'border-[#a2d2ff]/80 bg-[#eaf5ff] text-[#4f7396]'
+      : 'border-cyan-300/60 bg-cyan-50 text-cyan-700',
 )
 const modalSurfaceClass = computed(() =>
-  isLightTheme.value
-    ? 'border-slate-200 bg-white text-slate-900'
-    : 'border-zinc-700 bg-zinc-900 text-slate-100',
+  isGraphiteTheme.value
+    ? 'border-zinc-700 bg-zinc-900 text-slate-100'
+    : isPastelTheme.value
+      ? 'border-[#cdb4db]/70 bg-[#fff9fd] text-[#5f4b70]'
+      : 'border-slate-200 bg-white text-slate-900',
 )
 const now = useNow({ interval: 60_000 })
 

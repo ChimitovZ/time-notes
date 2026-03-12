@@ -2,7 +2,7 @@ import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { useStorage } from '@vueuse/core'
 
-type ThemeMode = 'light' | 'graphite'
+type ThemeMode = 'light' | 'graphite' | 'pastel'
 type TimeDisplayMode = 'relative' | 'absolute'
 
 export const useUiStore = defineStore('ui', () => {
@@ -13,7 +13,8 @@ export const useUiStore = defineStore('ui', () => {
   const densityClass = computed(() => 'py-2')
 
   function toggleTheme() {
-    themeMode.value = themeMode.value === 'light' ? 'graphite' : 'light'
+    themeMode.value =
+      themeMode.value === 'light' ? 'graphite' : themeMode.value === 'graphite' ? 'pastel' : 'light'
   }
 
   function toggleTimeDisplay() {
