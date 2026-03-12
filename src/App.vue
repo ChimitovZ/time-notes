@@ -33,7 +33,7 @@ const headerClass = computed(() =>
           :class="
             themeMode === 'light'
               ? 'border-slate-300 text-slate-700 hover:border-cyan-400/50 hover:bg-cyan-50'
-              : 'border-white/15 text-zinc-100 hover:border-zinc-400/60 hover:bg-zinc-700/40'
+              : 'border-white/15 text-zinc-100 hover:border-cyan-300/40 hover:bg-cyan-400/10'
           "
           @click="uiStore.toggleTheme"
         >

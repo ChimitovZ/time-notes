@@ -53,7 +53,7 @@ const subtleSurfaceClass = computed(() =>
 const inputClass = computed(() =>
   isLightTheme.value
     ? 'border-slate-300 bg-white text-slate-900 placeholder:text-slate-400 focus:border-cyan-500/60'
-    : 'border-white/10 bg-slate-900 text-slate-100 placeholder:text-slate-500 focus:border-slate-400/70',
+    : 'border-white/10 bg-slate-900 text-slate-100 placeholder:text-slate-500 focus:border-cyan-300/50',
 )
 const noteCardClass = computed(() =>
   isLightTheme.value ? 'border-slate-200 bg-slate-50/70' : 'border-white/10 bg-slate-900/60',
@@ -66,12 +66,12 @@ const neutralButtonClass = computed(() =>
     : 'border-white/15 text-slate-300 hover:border-white/30',
 )
 const checkboxClass = computed(() =>
-  isLightTheme.value ? 'size-3.5 cursor-pointer accent-cyan-500' : 'size-3.5 cursor-pointer accent-zinc-500',
+  isLightTheme.value ? 'size-3.5 cursor-pointer accent-cyan-500' : 'size-3.5 cursor-pointer accent-cyan-400',
 )
 const selectedGroupButtonClass = computed(() =>
   isLightTheme.value
     ? 'border-cyan-300/60 bg-cyan-50 text-cyan-700'
-    : 'border-zinc-500/60 bg-zinc-700/40 text-zinc-100',
+    : 'border-cyan-300/40 bg-cyan-400/10 text-cyan-200',
 )
 
 watch(notesPerPage, () => {
@@ -225,7 +225,7 @@ function switchGroup(groupId: number | null) {
             :class="
               isLightTheme
                 ? 'cursor-pointer rounded-xl border border-violet-300/70 bg-violet-100 px-3 py-1.5 text-xs font-semibold text-violet-800 transition hover:bg-violet-200 disabled:cursor-not-allowed disabled:opacity-50'
-                : 'cursor-pointer rounded-xl border border-zinc-500/40 bg-zinc-700/30 px-3 py-1.5 text-xs font-semibold text-zinc-100 transition hover:bg-zinc-700/50 disabled:cursor-not-allowed disabled:opacity-50'
+                : 'cursor-pointer rounded-xl border border-violet-300/30 bg-violet-400/10 px-3 py-1.5 text-xs font-semibold text-violet-200 transition hover:bg-violet-400/20 disabled:cursor-not-allowed disabled:opacity-50'
             "
             @click="improveCreateText"
           >
@@ -237,7 +237,7 @@ function switchGroup(groupId: number | null) {
             :class="
               isLightTheme
                 ? 'cursor-pointer rounded-xl border border-cyan-300/70 bg-cyan-100 px-3 py-1.5 text-xs font-semibold text-cyan-800 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-50'
-                : 'cursor-pointer rounded-xl border border-zinc-500/40 bg-zinc-700/30 px-3 py-1.5 text-xs font-semibold text-zinc-100 transition hover:bg-zinc-700/50 disabled:cursor-not-allowed disabled:opacity-50'
+                : 'cursor-pointer rounded-xl border border-cyan-300/30 bg-cyan-400/10 px-3 py-1.5 text-xs font-semibold text-cyan-200 transition hover:bg-cyan-400/20 disabled:cursor-not-allowed disabled:opacity-50'
             "
           >
             {{ isCreating ? 'Сохраняю...' : 'Сохранить заметку' }}
@@ -318,7 +318,7 @@ function switchGroup(groupId: number | null) {
                 :class="
                   isLightTheme
                     ? 'cursor-pointer rounded-lg border border-violet-300/70 bg-violet-100 px-2 py-1 text-[11px] font-semibold text-violet-800 transition hover:bg-violet-200 disabled:cursor-not-allowed disabled:opacity-50'
-                    : 'cursor-pointer rounded-lg border border-zinc-500/40 bg-zinc-700/30 px-2 py-1 text-[11px] font-semibold text-zinc-100 transition hover:bg-zinc-700/50 disabled:cursor-not-allowed disabled:opacity-50'
+                    : 'cursor-pointer rounded-lg border border-violet-300/30 bg-violet-400/10 px-2 py-1 text-[11px] font-semibold text-violet-200 transition hover:bg-violet-400/20 disabled:cursor-not-allowed disabled:opacity-50'
                 "
                 @click="improveEditingText"
               >
@@ -337,7 +337,7 @@ function switchGroup(groupId: number | null) {
                 :class="
                   isLightTheme
                     ? 'cursor-pointer rounded-lg border border-cyan-300/70 bg-cyan-100 px-2 py-1 text-[11px] font-semibold text-cyan-800 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-50'
-                    : 'cursor-pointer rounded-lg border border-zinc-500/40 bg-zinc-700/30 px-2 py-1 text-[11px] font-semibold text-zinc-100 transition hover:bg-zinc-700/50 disabled:cursor-not-allowed disabled:opacity-50'
+                    : 'cursor-pointer rounded-lg border border-cyan-300/30 bg-cyan-400/10 px-2 py-1 text-[11px] font-semibold text-cyan-200 transition hover:bg-cyan-400/20 disabled:cursor-not-allowed disabled:opacity-50'
                 "
               >
                 {{ isUpdating ? 'Сохр...' : 'Сохранить' }}
@@ -390,13 +390,13 @@ function switchGroup(groupId: number | null) {
           :class="
             isLightTheme
               ? 'rounded-xl border border-cyan-300/50 bg-cyan-50 px-3 py-3 text-left'
-              : 'rounded-xl border border-zinc-600/60 bg-zinc-800/60 px-3 py-3 text-left'
+              : 'rounded-xl border border-cyan-400/30 bg-cyan-400/10 px-3 py-3 text-left'
           "
         >
-          <p :class="isLightTheme ? 'text-2xl font-semibold text-cyan-700' : 'text-2xl font-semibold text-zinc-100'">
+          <p :class="isLightTheme ? 'text-2xl font-semibold text-cyan-700' : 'text-2xl font-semibold text-cyan-200'">
             {{ notesCount }}
           </p>
-          <p :class="isLightTheme ? 'text-xs text-cyan-700/80' : 'text-xs text-zinc-300/90'">
+          <p :class="isLightTheme ? 'text-xs text-cyan-700/80' : 'text-xs text-cyan-100/80'">
             {{ selectedGroupId ? `В группе "${activeGroupName}"` : 'Всего заметок в базе' }}
           </p>
         </div>
@@ -429,7 +429,7 @@ function switchGroup(groupId: number | null) {
               :class="
                 isLightTheme
                   ? 'cursor-pointer rounded-lg border border-amber-300/70 bg-amber-100 px-2.5 py-1.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-50'
-                  : 'cursor-pointer rounded-lg border border-zinc-500/40 bg-zinc-700/30 px-2.5 py-1.5 text-xs font-semibold text-zinc-100 transition hover:bg-zinc-700/50 disabled:cursor-not-allowed disabled:opacity-50'
+                  : 'cursor-pointer rounded-lg border border-amber-300/30 bg-amber-400/10 px-2.5 py-1.5 text-xs font-semibold text-amber-200 transition hover:bg-amber-400/20 disabled:cursor-not-allowed disabled:opacity-50'
               "
               @click="submitCreateGroup"
             >
