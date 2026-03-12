@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
+import { useNow } from '@vueuse/core'
 
 import {
   formatNoteDate,
@@ -12,7 +13,7 @@ import {
 import { useUiStore } from '@/stores/ui'
 
 const uiStore = useUiStore()
-const { notesPerPage, densityClass, themeMode } = storeToRefs(uiStore)
+const { notesPerPage, densityClass, themeMode, timeDisplayMode } = storeToRefs(uiStore)
 const currentPage = ref(1)
 const selectedGroupId = ref<number | null>(null)
 const {
@@ -118,6 +119,7 @@ const modalSurfaceClass = computed(() =>
     ? 'border-slate-200 bg-white text-slate-900'
     : 'border-zinc-700 bg-zinc-900 text-slate-100',
 )
+const now = useNow({ interval: 60_000 })
 
 watch(notesPerPage, () => {
   currentPage.value = 1
@@ -325,6 +327,10 @@ function getVersionPreview(text: string): string {
   return normalized.length > 90 ? `${normalized.slice(0, 90).trimEnd()}...` : normalized
 }
 
+function formatUiDate(value: string): string {
+  return formatNoteDate(value, timeDisplayMode.value, now.value.getTime())
+}
+
 function startEditComment(comment: NoteComment) {
   editingCommentId.value = comment.id
   editingCommentText.value = comment.text
@@ -469,7 +475,7 @@ async function removeComment(commentId: number) {
               <p :class="[mainTextClass, 'max-h-10 overflow-hidden text-sm font-medium']">
                 {{ note.text }}
               </p>
-              <p :class="[mutedTextClass, 'text-xs']">{{ formatNoteDate(note.createdAt) }}</p>
+              <p :class="[mutedTextClass, 'text-xs']">{{ formatUiDate(note.createdAt) }}</p>
             </div>
             <div class="flex shrink-0 gap-1">
               <button
@@ -704,7 +710,7 @@ async function removeComment(commentId: number) {
       <div class="mb-3 flex items-start justify-between gap-3">
         <div>
           <h3 :class="[mainTextClass, 'text-base font-semibold']">Полная заметка</h3>
-          <p :class="[mutedTextClass, 'text-xs']">{{ formatNoteDate(openedNote.createdAt) }}</p>
+          <p :class="[mutedTextClass, 'text-xs']">{{ formatUiDate(openedNote.createdAt) }}</p>
           <p :class="[mutedTextClass, 'text-xs']">Текущая версия: v{{ openedNote.version }}</p>
         </div>
         <button
@@ -745,7 +751,7 @@ async function removeComment(commentId: number) {
             <div class="min-w-0">
               <p :class="[mainTextClass, 'truncate text-[11px] font-medium']">{{ getVersionPreview(versionItem.text) }}</p>
               <p :class="[mutedTextClass, 'truncate text-[10px]']">
-                v{{ versionItem.version }} • {{ formatNoteDate(versionItem.createdAt) }}
+                v{{ versionItem.version }} • {{ formatUiDate(versionItem.createdAt) }}
               </p>
             </div>
             <button
@@ -796,7 +802,7 @@ async function removeComment(commentId: number) {
             <div v-if="editingCommentId !== comment.id" class="space-y-1">
               <p :class="[mainTextClass, 'text-[11px] leading-relaxed']">{{ comment.text }}</p>
               <div class="flex items-center justify-between gap-2">
-                <p :class="[mutedTextClass, 'text-[10px]']">{{ formatNoteDate(comment.createdAt) }}</p>
+                <p :class="[mutedTextClass, 'text-[10px]']">{{ formatUiDate(comment.createdAt) }}</p>
                 <div class="flex gap-1">
                   <button
                     type="button"

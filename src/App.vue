@@ -5,7 +5,7 @@ import { storeToRefs } from 'pinia'
 import { useUiStore } from '@/stores/ui'
 
 const uiStore = useUiStore()
-const { themeMode } = storeToRefs(uiStore)
+const { themeMode, timeDisplayMode } = storeToRefs(uiStore)
 
 const shellClass = computed(() =>
   themeMode.value === 'light' ? 'bg-slate-50 text-slate-900' : 'bg-zinc-900 text-zinc-100',
@@ -27,18 +27,32 @@ const headerClass = computed(() =>
           <h1 class="text-sm font-semibold sm:text-base">Заметки</h1>
         </div>
 
-        <button
-          type="button"
-          class="cursor-pointer rounded-xl border px-3 py-1.5 text-xs font-medium transition"
-          :class="
-            themeMode === 'light'
-              ? 'border-slate-300 text-slate-700 hover:border-cyan-400/50 hover:bg-cyan-50'
-              : 'border-white/15 text-zinc-100 hover:border-cyan-300/40 hover:bg-cyan-400/10'
-          "
-          @click="uiStore.toggleTheme"
-        >
-          {{ themeMode === 'light' ? 'Тема: Light' : 'Тема: Graphite' }}
-        </button>
+        <div class="flex items-center gap-1.5">
+          <button
+            type="button"
+            class="cursor-pointer rounded-xl border px-3 py-1.5 text-xs font-medium transition"
+            :class="
+              themeMode === 'light'
+                ? 'border-slate-300 text-slate-700 hover:border-cyan-400/50 hover:bg-cyan-50'
+                : 'border-white/15 text-zinc-100 hover:border-cyan-300/40 hover:bg-cyan-400/10'
+            "
+            @click="uiStore.toggleTheme"
+          >
+            {{ themeMode === 'light' ? 'Тема: Light' : 'Тема: Graphite' }}
+          </button>
+          <button
+            type="button"
+            class="cursor-pointer rounded-xl border px-3 py-1.5 text-xs font-medium transition"
+            :class="
+              themeMode === 'light'
+                ? 'border-slate-300 text-slate-700 hover:border-cyan-400/50 hover:bg-cyan-50'
+                : 'border-white/15 text-zinc-100 hover:border-cyan-300/40 hover:bg-cyan-400/10'
+            "
+            @click="uiStore.toggleTimeDisplay"
+          >
+            {{ timeDisplayMode === 'relative' ? 'Время: Относительное' : 'Время: Абсолютное' }}
+          </button>
+        </div>
       </header>
 
       <main class="flex-1">

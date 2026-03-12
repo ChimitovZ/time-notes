@@ -227,11 +227,39 @@ async function deleteNoteComment(commentId: number): Promise<void> {
   await http.delete(`/comments/${commentId}`)
 }
 
-export function formatNoteDate(value: string): string {
+export function formatNoteDate(
+  value: string,
+  mode: 'relative' | 'absolute' = 'absolute',
+  nowMs = Date.now(),
+): string {
   const parsed = new Date(value)
 
   if (Number.isNaN(parsed.getTime())) {
     return value
+  }
+
+  if (mode === 'relative') {
+    const diffMs = parsed.getTime() - nowMs
+    const abs = Math.abs(diffMs)
+    const rtf = new Intl.RelativeTimeFormat('ru-RU', { numeric: 'auto' })
+
+    if (abs < 60_000) {
+      return rtf.format(Math.round(diffMs / 1000), 'second')
+    }
+    if (abs < 3_600_000) {
+      return rtf.format(Math.round(diffMs / 60_000), 'minute')
+    }
+    if (abs < 86_400_000) {
+      return rtf.format(Math.round(diffMs / 3_600_000), 'hour')
+    }
+    if (abs < 2_592_000_000) {
+      return rtf.format(Math.round(diffMs / 86_400_000), 'day')
+    }
+    if (abs < 31_536_000_000) {
+      return rtf.format(Math.round(diffMs / 2_592_000_000), 'month')
+    }
+
+    return rtf.format(Math.round(diffMs / 31_536_000_000), 'year')
   }
 
   return new Intl.DateTimeFormat('ru-RU', {
