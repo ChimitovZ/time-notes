@@ -80,6 +80,19 @@ const themeOptions: Array<{
       cardBorder: '#c71f37',
     },
   },
+  {
+    id: 'minimal',
+    title: 'Minimal',
+    sampleText: 'Минимал заметка',
+    preview: {
+      surface: '#ffffff',
+      border: '#e5e7eb',
+      title: '#111827',
+      muted: '#6b7280',
+      cardBg: '#fafafa',
+      cardBorder: '#e5e7eb',
+    },
+  },
 ]
 
 const themeLabel = computed(
