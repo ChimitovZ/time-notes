@@ -49,6 +49,7 @@ npm run dev
 - `POST /api/ai/improve` - улучшить текст через ИИ (`{ "text": "..." }`)
 - `GET /api/groups` - список групп заметок
 - `POST /api/groups` - создать группу (`{ "name": "...", "noteIds": [1,2,3] }`)
+- `DELETE /api/groups/:id` - удалить группу (заметки не удаляются)
 - `GET /api/notes?groupId=1&limit=10&offset=0` - заметки конкретной группы
 
 База данных создается автоматически в `data/notes.db`.

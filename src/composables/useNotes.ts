@@ -156,6 +156,10 @@ async function createGroup(payload: { name: string; noteIds: number[] }): Promis
   return parsedOutput.data
 }
 
+async function deleteGroup(groupId: number): Promise<void> {
+  await http.delete(`/groups/${groupId}`)
+}
+
 async function fetchNoteVersions(noteId: number): Promise<NoteVersion[]> {
   const response = await http.get(`/notes/${noteId}/versions`)
   const parsed = noteVersionsSchema.safeParse(response.data)
@@ -324,6 +328,13 @@ export function useNotes(
       await queryClient.invalidateQueries({ queryKey: ['groups'] })
     },
   })
+  const deleteGroupMutation = useMutation({
+    mutationFn: deleteGroup,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['groups'] })
+      await queryClient.invalidateQueries({ queryKey: ['notes'] })
+    },
+  })
   const restoreVersionMutation = useMutation({
     mutationFn: restoreNoteVersion,
     onSuccess: async () => {
@@ -353,6 +364,7 @@ export function useNotes(
     deleteNote: deleteMutation.mutateAsync,
     improveText: improveMutation.mutateAsync,
     createGroup: createGroupMutation.mutateAsync,
+    deleteGroup: deleteGroupMutation.mutateAsync,
     fetchNoteVersions,
     restoreNoteVersion: restoreVersionMutation.mutateAsync,
     fetchNoteComments,
@@ -364,6 +376,7 @@ export function useNotes(
     isDeleting: deleteMutation.isPending,
     isImproving: improveMutation.isPending,
     isCreatingGroup: createGroupMutation.isPending,
+    isDeletingGroup: deleteGroupMutation.isPending,
     isRestoringVersion: restoreVersionMutation.isPending,
     isCreatingComment: createCommentMutation.isPending,
     isUpdatingComment: updateCommentMutation.isPending,

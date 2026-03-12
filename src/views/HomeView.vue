@@ -27,12 +27,14 @@ const {
   isDeleting,
   isImproving,
   isCreatingGroup,
+  isDeletingGroup,
   isGroupsLoading,
   createNote,
   updateNote,
   deleteNote,
   improveText,
   createGroup,
+  deleteGroup,
   fetchNoteVersions,
   restoreNoteVersion,
   fetchNoteComments,
@@ -236,6 +238,18 @@ async function submitCreateGroup() {
   })
   groupNameInput.value = ''
   selectedNoteIds.value = []
+}
+
+async function removeGroup(groupId: number) {
+  if (!window.confirm('Удалить группу? Заметки останутся.')) {
+    return
+  }
+
+  await deleteGroup(groupId)
+
+  if (selectedGroupId.value === groupId) {
+    selectedGroupId.value = null
+  }
 }
 
 function clearSelection() {
@@ -680,7 +694,7 @@ async function removeComment(commentId: number) {
             </button>
           </div>
         </div>
-        <div class="mb-2 flex flex-wrap gap-1.5">
+        <div class="mb-2 space-y-1.5">
           <button
             type="button"
             class="cursor-pointer rounded-lg border px-2 py-1 transition"
@@ -695,22 +709,34 @@ async function removeComment(commentId: number) {
           >
             Все заметки
           </button>
-          <button
-            v-for="group in groups"
-            :key="group.id"
-            type="button"
-            class="cursor-pointer rounded-lg border px-2 py-1 transition"
-            :class="
-              selectedGroupId === group.id
-                ? selectedGroupButtonClass
-                : isLightTheme
-                  ? 'border-slate-300 text-slate-700 hover:border-slate-400'
-                  : 'border-white/15 text-slate-300 hover:border-white/30'
-            "
-            @click="switchGroup(group.id)"
-          >
-            {{ group.name }} ({{ group.noteCount }})
-          </button>
+          <div v-for="group in groups" :key="group.id" class="flex items-center gap-1.5">
+            <button
+              type="button"
+              class="min-w-0 flex-1 cursor-pointer rounded-lg border px-2 py-1 text-left transition"
+              :class="
+                selectedGroupId === group.id
+                  ? selectedGroupButtonClass
+                  : isLightTheme
+                    ? 'border-slate-300 text-slate-700 hover:border-slate-400'
+                    : 'border-white/15 text-slate-300 hover:border-white/30'
+              "
+              @click="switchGroup(group.id)"
+            >
+              <span class="truncate">{{ group.name }} ({{ group.noteCount }})</span>
+            </button>
+            <button
+              type="button"
+              :disabled="isDeletingGroup"
+              :class="
+                isLightTheme
+                  ? 'cursor-pointer rounded-lg border border-rose-300/70 bg-rose-100 px-2 py-1 text-[10px] font-medium text-rose-700 transition hover:bg-rose-200 disabled:cursor-not-allowed disabled:opacity-50'
+                  : 'cursor-pointer rounded-lg border border-rose-300/30 bg-rose-400/10 px-2 py-1 text-[10px] font-medium text-rose-200 transition hover:bg-rose-400/20 disabled:cursor-not-allowed disabled:opacity-50'
+              "
+              @click="removeGroup(group.id)"
+            >
+              {{ isDeletingGroup ? '...' : 'Удал.' }}
+            </button>
+          </div>
         </div>
         <p v-if="isGroupsLoading" :class="[mutedTextClass, 'text-[11px]']">Загружаю группы...</p>
       </article>

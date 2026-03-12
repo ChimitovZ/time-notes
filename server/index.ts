@@ -47,6 +47,9 @@ const listNotesQuerySchema = z.object({
 const noteParamsSchema = z.object({
   id: z.coerce.number().int().min(1),
 })
+const groupParamsSchema = z.object({
+  id: z.coerce.number().int().min(1),
+})
 const noteVersionParamsSchema = z.object({
   id: z.coerce.number().int().min(1),
   version: z.coerce.number().int().min(1),
@@ -190,6 +193,25 @@ app.post('/api/groups', async (request, reply) => {
     createdAt: now,
     noteCount: uniqueNoteIds.length,
   })
+})
+
+app.delete('/api/groups/:id', async (request, reply) => {
+  const parsedParams = groupParamsSchema.safeParse(request.params)
+
+  if (!parsedParams.success) {
+    return reply.code(400).send({
+      message: 'Некорректный идентификатор группы',
+      issues: parsedParams.error.issues,
+    })
+  }
+
+  const result = db.prepare('DELETE FROM note_groups WHERE id = ?').run(parsedParams.data.id)
+
+  if (result.changes === 0) {
+    return reply.code(404).send({ message: 'Группа не найдена' })
+  }
+
+  return reply.code(204).send()
 })
 
 app.post('/api/notes', async (request, reply) => {
