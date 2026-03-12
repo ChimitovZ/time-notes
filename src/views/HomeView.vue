@@ -10,6 +10,9 @@ import {
   type NoteComment,
   type NoteVersion,
 } from '@/composables/useNotes'
+import NoteModal from '@/components/home/NoteModal.vue'
+import NotesPanel from '@/components/home/NotesPanel.vue'
+import SidebarPanel from '@/components/home/SidebarPanel.vue'
 import { useUiStore } from '@/stores/ui'
 
 const uiStore = useUiStore()
@@ -100,6 +103,34 @@ const statCaptionClass = computed(() => 'theme-stat-caption')
 const modalOverlayClass = computed(() => 'theme-modal-overlay')
 const now = useNow({ interval: 60_000 })
 
+function setNotesPerPage(value: number) {
+  notesPerPage.value = value
+}
+
+function setNoteInput(value: string) {
+  noteInput.value = value
+}
+
+function setEditingText(value: string) {
+  editingText.value = value
+}
+
+function setGroupNameInput(value: string) {
+  groupNameInput.value = value
+}
+
+function setModalText(value: string) {
+  modalText.value = value
+}
+
+function setNewCommentText(value: string) {
+  newCommentText.value = value
+}
+
+function setEditingCommentText(value: string) {
+  editingCommentText.value = value
+}
+
 watch(notesPerPage, () => {
   currentPage.value = 1
 })
@@ -146,20 +177,6 @@ function toggleNoteSelection(noteId: number) {
     : [...selectedNoteIds.value, noteId]
 }
 
-function handleNoteCardClick(note: Note, event: MouseEvent) {
-  const target = event.target as HTMLElement | null
-  if (!target) {
-    openNoteModal(note)
-    return
-  }
-
-  if (target.closest('button, input, textarea, label, a')) {
-    return
-  }
-
-  openNoteModal(note)
-}
-
 function toggleAllVisibleNotes(checked: boolean) {
   if (checked) {
     selectedNoteIds.value = [
@@ -170,10 +187,6 @@ function toggleAllVisibleNotes(checked: boolean) {
 
   const visibleIds = new Set(notes.value.map((note) => note.id))
   selectedNoteIds.value = selectedNoteIds.value.filter((id) => !visibleIds.has(id))
-}
-
-function handleSelectAllChange(event: Event) {
-  toggleAllVisibleNotes((event.target as HTMLInputElement).checked)
 }
 
 const isAllVisibleSelected = computed(() => {
@@ -390,492 +403,126 @@ async function removeComment(commentId: number) {
 
 <template>
   <section class="grid gap-4 sm:grid-cols-[1.15fr_0.85fr]">
-    <article :class="[surfaceClass, 'rounded-2xl border p-3 sm:p-4']">
-      <div class="mb-3 flex items-center justify-between">
-        <h2 class="text-sm font-semibold sm:text-base">Последние заметки</h2>
-        <p :class="[mutedTextClass, 'text-[11px]']">Выбрано: {{ selectedNotesCount }}</p>
-        <label :class="[mutedTextClass, 'flex items-center gap-2 text-xs']">
-          <span>Показывать</span>
-          <input
-            v-model.number="notesPerPage"
-            type="number"
-            min="4"
-            max="20"
-            :class="[inputClass, 'w-14 rounded-lg border px-2 py-1 outline-none']"
-          />
-        </label>
-      </div>
+    <NotesPanel
+      :notes-per-page="notesPerPage"
+      :selected-notes-count="selectedNotesCount"
+      :note-input="noteInput"
+      :is-improving="isImproving"
+      :is-creating="isCreating"
+      :is-loading="isLoading"
+      :is-error="isError"
+      :error-message="error?.message ?? 'Не удалось загрузить заметки'"
+      :notes="notes"
+      :editing-id="editingId"
+      :editing-text="editingText"
+      :selected-note-ids="selectedNoteIds"
+      :density-class="densityClass"
+      :input-class="inputClass"
+      :subtle-surface-class="subtleSurfaceClass"
+      :note-card-class="noteCardClass"
+      :muted-text-class="mutedTextClass"
+      :main-text-class="mainTextClass"
+      :neutral-button-class="neutralButtonClass"
+      :checkbox-class="checkboxClass"
+      :primary-button-class="primaryButtonClass"
+      :ai-button-class="aiButtonClass"
+      :is-all-visible-selected="isAllVisibleSelected"
+      :current-page="currentPage"
+      :total-pages="totalPages"
+      :is-updating="isUpdating"
+      :on-notes-per-page-change="setNotesPerPage"
+      :on-note-input-change="setNoteInput"
+      :on-submit-note="submitNote"
+      :on-improve-create-text="improveCreateText"
+      :on-toggle-note-selection="toggleNoteSelection"
+      :on-open-note="openNoteModal"
+      :on-editing-text-change="setEditingText"
+      :on-save-edit="saveEdit"
+      :on-cancel-edit="cancelEdit"
+      :on-improve-editing-text="improveEditingText"
+      :on-toggle-all-visible-notes="toggleAllVisibleNotes"
+      :on-prev-page="goToPreviousPage"
+      :on-next-page="goToNextPage"
+      :format-ui-date="formatUiDate"
+      :format-absolute-date="formatAbsoluteDate"
+    />
 
-      <form class="mb-3 space-y-2" @submit.prevent="submitNote">
-        <textarea
-          v-model="noteInput"
-          rows="3"
-          placeholder="Введите заметку..."
-          :class="[
-            inputClass,
-            'w-full resize-none rounded-xl border px-3 py-2 text-sm outline-none transition',
-          ]"
-          @keydown.ctrl.enter.prevent="submitNote"
-        />
-        <p :class="[mutedTextClass, 'text-[11px]']">
-          Подсказка: нажмите Ctrl+Enter, чтобы быстро сохранить заметку.
-        </p>
-        <div class="flex flex-wrap gap-1.5">
-          <button
-            type="button"
-            :disabled="isImproving || !noteInput.trim()"
-            :class="[aiButtonClass, 'cursor-pointer rounded-xl border px-3 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50']"
-            @click="improveCreateText"
-          >
-            {{ isImproving ? 'Улучшаю...' : 'Улучшить текст ИИ' }}
-          </button>
-          <button
-            type="submit"
-            :disabled="isCreating || !noteInput.trim()"
-            :class="[primaryButtonClass, 'cursor-pointer rounded-xl border px-3 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50']"
-          >
-            {{ isCreating ? 'Сохраняю...' : 'Сохранить заметку' }}
-          </button>
-        </div>
-      </form>
-
-      <div v-if="isLoading" :class="[subtleSurfaceClass, 'rounded-xl border px-3 py-2 text-xs']">
-        Загрузка...
-      </div>
-      <div
-        v-else-if="isError"
-        class="theme-error rounded-xl border px-3 py-2 text-xs"
-      >
-        {{ error?.message ?? 'Не удалось загрузить заметки' }}
-      </div>
-
-      <ul v-else-if="notes.length > 0" class="space-y-2">
-        <li
-          v-for="note in notes"
-          :key="note.id"
-          :class="['rounded-xl border px-3 transition cursor-pointer', noteCardClass, densityClass]"
-        >
-          <div
-            v-if="editingId !== note.id"
-            class="flex items-start justify-between gap-3"
-            @click="handleNoteCardClick(note, $event)"
-          >
-            <label class="mt-0.5 shrink-0">
-              <input
-                :checked="selectedNoteIds.includes(note.id)"
-                type="checkbox"
-                :class="checkboxClass"
-                @click.stop
-                @change="toggleNoteSelection(note.id)"
-              />
-            </label>
-            <div class="min-w-0 flex-1 text-left">
-              <p :class="[mainTextClass, 'max-h-10 overflow-hidden text-sm font-medium']">
-                {{ note.text }}
-              </p>
-              <p :class="[mutedTextClass, 'text-xs']" :title="formatAbsoluteDate(note.createdAt)">
-                {{ formatUiDate(note.createdAt) }}
-              </p>
-            </div>
-            <div class="flex shrink-0 gap-1">
-              <button
-                type="button"
-                :class="[
-                  neutralButtonClass,
-                  'cursor-pointer rounded-lg border px-2 py-1 text-[11px] transition',
-                ]"
-                @click.stop="openNoteModal(note)"
-              >
-                Открыть
-              </button>
-            </div>
-          </div>
-          <form v-else class="space-y-2" @submit.prevent="saveEdit(note.id)">
-            <textarea
-              v-model="editingText"
-              rows="3"
-              :class="[
-                inputClass,
-                'w-full resize-none rounded-lg border px-2 py-1.5 text-sm outline-none',
-              ]"
-              @keydown.ctrl.enter.prevent="saveEdit(note.id)"
-            />
-            <p :class="[mutedTextClass, 'text-[11px]']">
-              Подсказка: Ctrl+Enter сохраняет изменения.
-            </p>
-            <div class="flex justify-end gap-1">
-              <button
-                type="button"
-                :disabled="isImproving || !editingText.trim()"
-                :class="[aiButtonClass, 'cursor-pointer rounded-lg border px-2 py-1 text-[11px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-50']"
-                @click="improveEditingText"
-              >
-                {{ isImproving ? 'Улучшаю...' : 'ИИ улучшить' }}
-              </button>
-              <button
-                type="button"
-                :class="[
-                  neutralButtonClass,
-                  'cursor-pointer rounded-lg border px-2 py-1 text-[11px] transition',
-                ]"
-                @click="cancelEdit"
-              >
-                Отмена
-              </button>
-              <button
-                type="submit"
-                :disabled="isUpdating || !editingText.trim()"
-                :class="[primaryButtonClass, 'cursor-pointer rounded-lg border px-2 py-1 text-[11px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-50']"
-              >
-                {{ isUpdating ? 'Сохр...' : 'Сохранить' }}
-              </button>
-            </div>
-          </form>
-        </li>
-      </ul>
-      <div v-else :class="[subtleSurfaceClass, 'rounded-xl border px-3 py-2 text-xs']">
-        Пока нет заметок. Добавьте первую запись выше.
-      </div>
-
-      <div
-        v-if="notes.length > 0"
-        :class="[mutedTextClass, 'mt-2 flex items-center gap-2 text-[11px]']"
-      >
-        <input
-          :checked="isAllVisibleSelected"
-          type="checkbox"
-          :class="checkboxClass"
-          @change="handleSelectAllChange"
-        />
-        <span>Выбрать все на текущей странице</span>
-      </div>
-
-      <div :class="[mutedTextClass, 'mt-3 flex items-center justify-between text-xs']">
-        <p>Страница {{ currentPage }} из {{ totalPages }}</p>
-        <div class="flex gap-1">
-          <button
-            type="button"
-            :class="[
-              neutralButtonClass,
-              'cursor-pointer rounded-lg border px-2 py-1 transition disabled:cursor-not-allowed disabled:opacity-50',
-            ]"
-            :disabled="currentPage <= 1 || isLoading"
-            @click="goToPreviousPage"
-          >
-            Назад
-          </button>
-          <button
-            type="button"
-            :class="[
-              neutralButtonClass,
-              'cursor-pointer rounded-lg border px-2 py-1 transition disabled:cursor-not-allowed disabled:opacity-50',
-            ]"
-            :disabled="currentPage >= totalPages || isLoading"
-            @click="goToNextPage"
-          >
-            Далее
-          </button>
-        </div>
-      </div>
-    </article>
-
-    <aside class="space-y-4">
-      <article :class="[surfaceClass, 'rounded-2xl border p-3 sm:p-4']">
-        <h3 class="mb-2 text-sm font-semibold">Статистика</h3>
-        <div
-          :class="[statCardClass, 'rounded-xl border px-3 py-3 text-left']"
-        >
-          <p :class="[statValueClass, 'text-2xl font-semibold']">
-            {{ notesCount }}
-          </p>
-          <p :class="[statCaptionClass, 'text-xs']">
-            {{ selectedGroupId ? `В группе "${activeGroupName}"` : 'Всего заметок в базе' }}
-          </p>
-        </div>
-      </article>
-
-      <article :class="[surfaceClass, 'rounded-2xl border p-3 text-xs sm:p-4']">
-        <h3 :class="[mainTextClass, 'mb-2 text-sm font-semibold']">Группы</h3>
-        <div :class="[subtleSurfaceClass, 'mb-2 space-y-2 rounded-xl border p-2']">
-          <div :class="[mutedTextClass, 'flex items-center justify-between text-[11px]']">
-            <p>Выбрано заметок: {{ selectedNotesCount }}</p>
-            <button
-              type="button"
-              :class="[neutralButtonClass, 'cursor-pointer rounded-md border px-2 py-1 transition']"
-              :disabled="selectedNotesCount === 0"
-              @click="clearSelection"
-            >
-              Снять выбор
-            </button>
-          </div>
-          <div class="flex flex-wrap gap-1.5">
-            <input
-              v-model="groupNameInput"
-              type="text"
-              placeholder="Название группы"
-              :class="[
-                inputClass,
-                'min-w-44 flex-1 rounded-lg border px-2 py-1.5 text-xs outline-none',
-              ]"
-            />
-            <button
-              type="button"
-              :disabled="isCreatingGroup || selectedNotesCount === 0 || !groupNameInput.trim()"
-              :class="[groupButtonClass, 'cursor-pointer rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50']"
-              @click="submitCreateGroup"
-            >
-              {{ isCreatingGroup ? 'Создаю...' : 'Создать группу' }}
-            </button>
-          </div>
-        </div>
-        <div class="mb-2 space-y-1.5">
-          <button
-            type="button"
-            class="cursor-pointer rounded-lg border px-2 py-1 transition"
-            :class="
-              selectedGroupId === null
-                ? selectedGroupButtonClass
-                : neutralButtonClass
-            "
-            @click="switchGroup(null)"
-          >
-            Все заметки
-          </button>
-          <div v-for="group in groups" :key="group.id" class="flex items-center gap-1.5">
-            <button
-              type="button"
-              class="min-w-0 flex-1 cursor-pointer rounded-lg border px-2 py-1 text-left transition"
-              :class="
-                selectedGroupId === group.id
-                  ? selectedGroupButtonClass
-                  : neutralButtonClass
-              "
-              @click="switchGroup(group.id)"
-            >
-              <span class="truncate">{{ group.name }} ({{ group.noteCount }})</span>
-            </button>
-            <button
-              type="button"
-              :disabled="isDeletingGroup"
-              :class="[dangerButtonClass, 'cursor-pointer rounded-lg border px-2 py-1 text-[10px] font-medium transition disabled:cursor-not-allowed disabled:opacity-50']"
-              @click="removeGroup(group.id)"
-            >
-              {{ isDeletingGroup ? '...' : 'Удал.' }}
-            </button>
-          </div>
-        </div>
-        <p v-if="isGroupsLoading" :class="[mutedTextClass, 'text-[11px]']">Загружаю группы...</p>
-      </article>
-
-      <article :class="[surfaceClass, 'rounded-2xl border p-3 text-xs sm:p-4']">
-        <h3 :class="[mainTextClass, 'mb-2 text-sm font-semibold']">Как это работает</h3>
-        <ul :class="[mutedTextClass, 'space-y-1']">
-          <li>Вводите текст в поле и нажимаете сохранить</li>
-          <li>API сохраняет заметку в SQLite</li>
-          <li>Сохраняется временная метка создания</li>
-          <li>Можно выбирать заметки и объединять их в группы</li>
-        </ul>
-      </article>
-    </aside>
+    <SidebarPanel
+      :notes-count="notesCount"
+      :selected-group-id="selectedGroupId"
+      :active-group-name="activeGroupName"
+      :selected-notes-count="selectedNotesCount"
+      :groups="groups"
+      :group-name-input="groupNameInput"
+      :is-creating-group="isCreatingGroup"
+      :is-deleting-group="isDeletingGroup"
+      :is-groups-loading="isGroupsLoading"
+      :main-text-class="mainTextClass"
+      :muted-text-class="mutedTextClass"
+      :surface-class="surfaceClass"
+      :subtle-surface-class="subtleSurfaceClass"
+      :input-class="inputClass"
+      :neutral-button-class="neutralButtonClass"
+      :selected-group-button-class="selectedGroupButtonClass"
+      :group-button-class="groupButtonClass"
+      :danger-button-class="dangerButtonClass"
+      :stat-card-class="statCardClass"
+      :stat-value-class="statValueClass"
+      :stat-caption-class="statCaptionClass"
+      :on-group-name-change="setGroupNameInput"
+      :on-clear-selection="clearSelection"
+      :on-submit-create-group="submitCreateGroup"
+      :on-switch-group="switchGroup"
+      :on-remove-group="removeGroup"
+    />
   </section>
 
-  <div
-    v-if="openedNote"
-    :class="[modalOverlayClass, 'fixed inset-0 z-50 flex items-center justify-center p-4']"
-    @click.self="closeNoteModal"
-  >
-    <div :class="[modalSurfaceClass, 'w-full max-w-5xl rounded-2xl border p-4 shadow-xl']">
-      <div class="mb-3 flex items-start justify-between gap-3">
-        <div>
-          <h3 :class="[mainTextClass, 'text-base font-semibold']">Полная заметка</h3>
-          <p :class="[mutedTextClass, 'text-xs']" :title="formatAbsoluteDate(openedNote.createdAt)">
-            {{ formatUiDate(openedNote.createdAt) }}
-          </p>
-          <p :class="[mutedTextClass, 'text-xs']">Текущая версия: v{{ openedNote.version }}</p>
-        </div>
-        <button
-          type="button"
-          :class="[
-            neutralButtonClass,
-            'cursor-pointer rounded-lg border px-2 py-1 text-[11px] transition',
-          ]"
-          @click="closeNoteModal"
-        >
-          Закрыть
-        </button>
-      </div>
-
-      <div class="grid gap-3 lg:grid-cols-[minmax(0,1fr)_280px]">
-        <div>
-          <textarea
-            v-model="modalText"
-            rows="10"
-            :class="[
-              inputClass,
-              'mb-2 w-full resize-y rounded-xl border px-3 py-2 text-sm outline-none',
-            ]"
-            @keydown.ctrl.enter.prevent="saveModalNote"
-          />
-          <p :class="[mutedTextClass, 'mb-2 text-[11px]']">
-            Подсказка: Ctrl+Enter сохраняет изменения в заметке.
-          </p>
-
-          <div :class="[subtleSurfaceClass, 'mb-3 rounded-xl border p-2.5']">
-            <p :class="[mainTextClass, 'mb-2 text-xs font-semibold']">Комментарии</p>
-            <form class="mb-2 space-y-1.5" @submit.prevent="submitComment">
-              <textarea
-                v-model="newCommentText"
-                rows="2"
-                placeholder="Добавьте комментарий..."
-                :class="[inputClass, 'w-full resize-y rounded-lg border px-2 py-1.5 text-xs outline-none']"
-                @keydown.ctrl.enter.prevent="submitComment"
-              />
-              <div class="flex justify-end">
-                <button
-                  type="submit"
-                  :disabled="isCreatingComment || !newCommentText.trim()"
-                  :class="[primaryButtonClass, 'cursor-pointer rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-50']"
-                >
-                  {{ isCreatingComment ? 'Добавляю...' : 'Добавить' }}
-                </button>
-              </div>
-            </form>
-            <p v-if="isCommentsLoading" :class="[mutedTextClass, 'text-[11px]']">Загрузка комментариев...</p>
-            <p v-else-if="commentsError" class="text-[11px] text-rose-500">{{ commentsError }}</p>
-            <ul v-else-if="sortedNoteComments.length > 0" class="max-h-40 space-y-1.5 overflow-y-auto pr-1">
-              <li
-                v-for="comment in sortedNoteComments"
-                :key="comment.id"
-                :class="[inputClass, 'rounded-lg border px-2 py-1.5']"
-              >
-                <div v-if="editingCommentId !== comment.id" class="space-y-1">
-                  <p :class="[mainTextClass, 'text-[11px] leading-relaxed']">{{ comment.text }}</p>
-                  <div class="flex items-center justify-between gap-2">
-                    <p :class="[mutedTextClass, 'text-[10px]']" :title="formatAbsoluteDate(comment.createdAt)">
-                      {{ formatUiDate(comment.createdAt) }}
-                    </p>
-                    <div class="flex gap-1">
-                      <button
-                        type="button"
-                        :class="[neutralButtonClass, 'cursor-pointer rounded-md border px-2 py-0.5 text-[10px] transition']"
-                        @click="startEditComment(comment)"
-                      >
-                        Изм.
-                      </button>
-                      <button
-                        type="button"
-                        :disabled="isDeletingComment"
-                        :class="[dangerButtonClass, 'cursor-pointer rounded-md border px-2 py-0.5 text-[10px] font-medium transition disabled:cursor-not-allowed disabled:opacity-50']"
-                        @click="removeComment(comment.id)"
-                      >
-                        Удал.
-                      </button>
-                    </div>
-                  </div>
-                </div>
-                <form v-else class="space-y-1.5" @submit.prevent="saveCommentEdit(comment.id)">
-                  <textarea
-                    v-model="editingCommentText"
-                    rows="2"
-                    :class="[inputClass, 'w-full resize-y rounded-md border px-2 py-1 text-[11px] outline-none']"
-                  />
-                  <div class="flex justify-end gap-1">
-                    <button
-                      type="button"
-                      :class="[neutralButtonClass, 'cursor-pointer rounded-md border px-2 py-0.5 text-[10px] transition']"
-                      @click="cancelEditComment"
-                    >
-                      Отмена
-                    </button>
-                    <button
-                      type="submit"
-                      :disabled="isUpdatingComment || !editingCommentText.trim()"
-                      :class="[primaryButtonClass, 'cursor-pointer rounded-md border px-2 py-0.5 text-[10px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-50']"
-                    >
-                      {{ isUpdatingComment ? 'Сохр...' : 'Сохранить' }}
-                    </button>
-                  </div>
-                </form>
-              </li>
-            </ul>
-            <p v-else :class="[mutedTextClass, 'text-[11px]']">Комментариев пока нет.</p>
-          </div>
-
-          <div class="flex flex-wrap justify-end gap-1.5">
-            <button
-              type="button"
-              :disabled="isDeleting"
-              :class="[dangerButtonClass, 'cursor-pointer rounded-xl border px-3 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50']"
-              @click="deleteModalNote"
-            >
-              {{ isDeleting ? 'Удаляю...' : 'Удалить' }}
-            </button>
-            <button
-              type="button"
-              :disabled="isImproving || !modalText.trim()"
-              :class="[aiButtonClass, 'cursor-pointer rounded-xl border px-3 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50']"
-              @click="improveModalText"
-            >
-              {{ isImproving ? 'Улучшаю...' : 'Улучшить ИИ' }}
-            </button>
-            <button
-              type="button"
-              :disabled="isUpdating || !modalText.trim()"
-              :class="[primaryButtonClass, 'cursor-pointer rounded-xl border px-3 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50']"
-              @click="saveModalNote"
-            >
-              {{ isUpdating ? 'Сохр...' : 'Сохранить' }}
-            </button>
-          </div>
-        </div>
-
-        <aside class="space-y-2">
-          <button
-            type="button"
-            :class="[neutralButtonClass, 'w-full cursor-pointer rounded-xl border px-3 py-2 text-xs font-semibold transition']"
-            @click="toggleVersionsPanel"
-          >
-            {{ isVersionsPanelOpen ? 'Скрыть историю версий' : 'Показать историю версий' }}
-          </button>
-
-          <div
-            v-if="isVersionsPanelOpen"
-            :class="[subtleSurfaceClass, 'rounded-xl border p-2.5']"
-          >
-            <p :class="[mainTextClass, 'mb-2 text-xs font-semibold']">История версий</p>
-            <p v-if="isVersionsLoading" :class="[mutedTextClass, 'text-[11px]']">Загрузка...</p>
-            <p v-else-if="versionsError" class="text-[11px] text-rose-500">{{ versionsError }}</p>
-            <ul v-else-if="noteVersions.length > 0" class="max-h-80 space-y-1 overflow-y-auto pr-1">
-              <li
-                v-for="versionItem in noteVersions"
-                :key="versionItem.version"
-                class="flex items-center justify-between gap-2"
-              >
-                <div class="min-w-0">
-                  <p :class="[mainTextClass, 'truncate text-[11px] font-medium']">
-                    {{ getVersionPreview(versionItem.text) }}
-                  </p>
-                  <p
-                    :class="[mutedTextClass, 'truncate text-[10px]']"
-                    :title="formatAbsoluteDate(versionItem.createdAt)"
-                  >
-                    v{{ versionItem.version }} • {{ formatUiDate(versionItem.createdAt) }}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  :disabled="isRestoringVersion || versionItem.version === openedNote.version"
-                  :class="[neutralButtonClass, 'cursor-pointer rounded-md border px-2 py-1 text-[10px] transition disabled:cursor-not-allowed disabled:opacity-50']"
-                  @click="restoreFromHistory(versionItem.version)"
-                >
-                  Восст.
-                </button>
-              </li>
-            </ul>
-            <p v-else :class="[mutedTextClass, 'text-[11px]']">История пока пустая.</p>
-          </div>
-        </aside>
-      </div>
-    </div>
-  </div>
+  <NoteModal
+    :opened-note="openedNote"
+    :modal-text="modalText"
+    :note-versions="noteVersions"
+    :is-versions-loading="isVersionsLoading"
+    :versions-error="versionsError"
+    :is-versions-panel-open="isVersionsPanelOpen"
+    :note-comments="sortedNoteComments"
+    :is-comments-loading="isCommentsLoading"
+    :comments-error="commentsError"
+    :new-comment-text="newCommentText"
+    :editing-comment-id="editingCommentId"
+    :editing-comment-text="editingCommentText"
+    :is-deleting="isDeleting"
+    :is-improving="isImproving"
+    :is-updating="isUpdating"
+    :is-restoring-version="isRestoringVersion"
+    :is-creating-comment="isCreatingComment"
+    :is-updating-comment="isUpdatingComment"
+    :is-deleting-comment="isDeletingComment"
+    :modal-overlay-class="modalOverlayClass"
+    :modal-surface-class="modalSurfaceClass"
+    :subtle-surface-class="subtleSurfaceClass"
+    :input-class="inputClass"
+    :muted-text-class="mutedTextClass"
+    :main-text-class="mainTextClass"
+    :neutral-button-class="neutralButtonClass"
+    :primary-button-class="primaryButtonClass"
+    :ai-button-class="aiButtonClass"
+    :danger-button-class="dangerButtonClass"
+    :format-ui-date="formatUiDate"
+    :format-absolute-date="formatAbsoluteDate"
+    :get-version-preview="getVersionPreview"
+    :on-close="closeNoteModal"
+    :on-modal-text-change="setModalText"
+    :on-save="saveModalNote"
+    :on-improve="improveModalText"
+    :on-delete="deleteModalNote"
+    :on-toggle-versions-panel="toggleVersionsPanel"
+    :on-restore-version="restoreFromHistory"
+    :on-new-comment-text-change="setNewCommentText"
+    :on-submit-comment="submitComment"
+    :on-start-edit-comment="startEditComment"
+    :on-editing-comment-text-change="setEditingCommentText"
+    :on-cancel-edit-comment="cancelEditComment"
+    :on-save-comment-edit="saveCommentEdit"
+    :on-remove-comment="removeComment"
+  />
 </template>
