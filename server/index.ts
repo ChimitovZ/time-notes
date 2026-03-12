@@ -9,12 +9,18 @@ type NoteRow = {
   id: number
   text: string
   created_at: string
+  version: number
 }
 type GroupRow = {
   id: number
   name: string
   created_at: string
   note_count: number
+}
+type NoteVersionRow = {
+  version: number
+  text: string
+  created_at: string
 }
 
 const app = Fastify({ logger: true })
@@ -33,6 +39,10 @@ const listNotesQuerySchema = z.object({
 })
 const noteParamsSchema = z.object({
   id: z.coerce.number().int().min(1),
+})
+const noteVersionParamsSchema = z.object({
+  id: z.coerce.number().int().min(1),
+  version: z.coerce.number().int().min(1),
 })
 const createGroupSchema = z.object({
   name: z.string().trim().min(1).max(120),
@@ -59,13 +69,13 @@ app.get('/api/notes', async (request, reply) => {
     parsedQuery.data.groupId === undefined
       ? (db
           .prepare(
-            'SELECT id, text, created_at FROM notes ORDER BY datetime(created_at) DESC, id DESC LIMIT ? OFFSET ?',
+            'SELECT id, text, created_at, version FROM notes ORDER BY datetime(created_at) DESC, id DESC LIMIT ? OFFSET ?',
           )
           .all(limit, offset) as NoteRow[])
       : (db
           .prepare(
             `
-            SELECT n.id, n.text, n.created_at
+            SELECT n.id, n.text, n.created_at, n.version
             FROM notes n
             INNER JOIN note_group_items ngi ON ngi.note_id = n.id
             WHERE ngi.group_id = ?
@@ -87,6 +97,7 @@ app.get('/api/notes', async (request, reply) => {
       id: row.id,
       text: row.text,
       createdAt: row.created_at,
+      version: row.version,
     })),
     total: total.count,
     limit,
@@ -169,14 +180,24 @@ app.post('/api/notes', async (request, reply) => {
   }
 
   const now = new Date().toISOString()
-  const result = db
-    .prepare('INSERT INTO notes (text, created_at) VALUES (?, ?)')
-    .run(parsed.data.text, now)
+  const trx = db.transaction(() => {
+    const noteResult = db.prepare('INSERT INTO notes (text, created_at, version) VALUES (?, ?, 1)').run(parsed.data.text, now)
+    const noteId = Number(noteResult.lastInsertRowid)
+    db.prepare('INSERT INTO note_versions (note_id, version, text, created_at) VALUES (?, ?, ?, ?)').run(
+      noteId,
+      1,
+      parsed.data.text,
+      now,
+    )
+    return noteId
+  })
+  const noteId = trx()
 
   return reply.code(201).send({
-    id: Number(result.lastInsertRowid),
+    id: noteId,
     text: parsed.data.text,
     createdAt: now,
+    version: 1,
   })
 })
 
@@ -205,26 +226,118 @@ app.patch('/api/notes/:id', async (request, reply) => {
     })
   }
 
-  const result = db
-    .prepare('UPDATE notes SET text = ? WHERE id = ?')
-    .run(parsedBody.data.text, parsedParams.data.id)
+  const current = db
+    .prepare('SELECT id, text, created_at, version FROM notes WHERE id = ?')
+    .get(parsedParams.data.id) as NoteRow | undefined
 
-  if (result.changes === 0) {
+  if (!current) {
     return reply.code(404).send({ message: 'Заметка не найдена' })
   }
 
-  const row = db.prepare('SELECT id, text, created_at FROM notes WHERE id = ?').get(parsedParams.data.id) as
-    | NoteRow
-    | undefined
-
-  if (!row) {
-    return reply.code(404).send({ message: 'Заметка не найдена' })
-  }
+  const now = new Date().toISOString()
+  const nextVersion = current.version + 1
+  const trx = db.transaction(() => {
+    db.prepare('INSERT OR IGNORE INTO note_versions (note_id, version, text, created_at) VALUES (?, ?, ?, ?)').run(
+      current.id,
+      current.version,
+      current.text,
+      current.created_at,
+    )
+    db.prepare('UPDATE notes SET text = ?, version = ? WHERE id = ?').run(parsedBody.data.text, nextVersion, current.id)
+    db.prepare('INSERT INTO note_versions (note_id, version, text, created_at) VALUES (?, ?, ?, ?)').run(
+      current.id,
+      nextVersion,
+      parsedBody.data.text,
+      now,
+    )
+  })
+  trx()
 
   return {
-    id: row.id,
+    id: current.id,
+    text: parsedBody.data.text,
+    createdAt: current.created_at,
+    version: nextVersion,
+  }
+})
+
+app.get('/api/notes/:id/versions', async (request, reply) => {
+  const parsedParams = noteParamsSchema.safeParse(request.params)
+
+  if (!parsedParams.success) {
+    return reply.code(400).send({
+      message: 'Некорректный идентификатор заметки',
+      issues: parsedParams.error.issues,
+    })
+  }
+
+  const noteExists = db.prepare('SELECT id FROM notes WHERE id = ?').get(parsedParams.data.id)
+  if (!noteExists) {
+    return reply.code(404).send({ message: 'Заметка не найдена' })
+  }
+
+  const rows = db
+    .prepare(
+      'SELECT version, text, created_at FROM note_versions WHERE note_id = ? ORDER BY version DESC',
+    )
+    .all(parsedParams.data.id) as NoteVersionRow[]
+
+  return rows.map((row) => ({
+    version: row.version,
     text: row.text,
     createdAt: row.created_at,
+  }))
+})
+
+app.post('/api/notes/:id/versions/:version/restore', async (request, reply) => {
+  const parsedParams = noteVersionParamsSchema.safeParse(request.params)
+
+  if (!parsedParams.success) {
+    return reply.code(400).send({
+      message: 'Некорректные параметры восстановления версии',
+      issues: parsedParams.error.issues,
+    })
+  }
+
+  const { id, version } = parsedParams.data
+  const current = db.prepare('SELECT id, text, created_at, version FROM notes WHERE id = ?').get(id) as
+    | NoteRow
+    | undefined
+  if (!current) {
+    return reply.code(404).send({ message: 'Заметка не найдена' })
+  }
+
+  const target = db
+    .prepare('SELECT version, text, created_at FROM note_versions WHERE note_id = ? AND version = ?')
+    .get(id, version) as NoteVersionRow | undefined
+  if (!target) {
+    return reply.code(404).send({ message: 'Версия не найдена' })
+  }
+
+  const now = new Date().toISOString()
+  const nextVersion = current.version + 1
+  const trx = db.transaction(() => {
+    db.prepare('INSERT OR IGNORE INTO note_versions (note_id, version, text, created_at) VALUES (?, ?, ?, ?)').run(
+      current.id,
+      current.version,
+      current.text,
+      current.created_at,
+    )
+    db.prepare('UPDATE notes SET text = ?, version = ? WHERE id = ?').run(target.text, nextVersion, current.id)
+    db.prepare('INSERT INTO note_versions (note_id, version, text, created_at) VALUES (?, ?, ?, ?)').run(
+      current.id,
+      nextVersion,
+      target.text,
+      now,
+    )
+  })
+  trx()
+
+  return {
+    id: current.id,
+    text: target.text,
+    createdAt: current.created_at,
+    version: nextVersion,
   }
 })
 

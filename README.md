@@ -40,6 +40,8 @@ npm run dev
 - `POST /api/notes` - создать заметку (`{ "text": "..." }`)
 - `PATCH /api/notes/:id` - обновить текст заметки (`{ "text": "..." }`)
 - `DELETE /api/notes/:id` - удалить заметку
+- `GET /api/notes/:id/versions` - получить историю версий заметки
+- `POST /api/notes/:id/versions/:version/restore` - восстановить выбранную версию
 - `POST /api/ai/improve` - улучшить текст через ИИ (`{ "text": "..." }`)
 - `GET /api/groups` - список групп заметок
 - `POST /api/groups` - создать группу (`{ "name": "...", "noteIds": [1,2,3] }`)

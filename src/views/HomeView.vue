@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 
-import { formatNoteDate, useNotes, type Note } from '@/composables/useNotes'
+import { formatNoteDate, useNotes, type Note, type NoteVersion } from '@/composables/useNotes'
 import { useUiStore } from '@/stores/ui'
 
 const uiStore = useUiStore()
@@ -26,6 +26,9 @@ const {
   deleteNote,
   improveText,
   createGroup,
+  fetchNoteVersions,
+  restoreNoteVersion,
+  isRestoringVersion,
   notesCount,
 } = useNotes(notesPerPage, currentPage, selectedGroupId)
 
@@ -36,6 +39,9 @@ const selectedNoteIds = ref<number[]>([])
 const groupNameInput = ref('')
 const openedNote = ref<Note | null>(null)
 const modalText = ref('')
+const noteVersions = ref<NoteVersion[]>([])
+const isVersionsLoading = ref(false)
+const versionsError = ref('')
 
 const totalPages = computed(() => Math.max(1, Math.ceil(notesCount.value / notesPerPage.value)))
 const selectedNotesCount = computed(() => selectedNoteIds.value.length)
@@ -189,11 +195,15 @@ function switchGroup(groupId: number | null) {
 function openNoteModal(note: Note) {
   openedNote.value = note
   modalText.value = note.text
+  void loadNoteVersions(note.id)
 }
 
 function closeNoteModal() {
   openedNote.value = null
   modalText.value = ''
+  noteVersions.value = []
+  versionsError.value = ''
+  isVersionsLoading.value = false
 }
 
 async function improveModalText() {
@@ -205,8 +215,10 @@ async function saveModalNote() {
     return
   }
 
-  await updateNote({ id: openedNote.value.id, text: modalText.value })
-  closeNoteModal()
+  const updated = await updateNote({ id: openedNote.value.id, text: modalText.value })
+  openedNote.value = updated
+  modalText.value = updated.text
+  await loadNoteVersions(updated.id)
 }
 
 async function deleteModalNote() {
@@ -226,6 +238,43 @@ async function deleteModalNote() {
   selectedNoteIds.value = selectedNoteIds.value.filter((id) => id !== deletingId)
   await deleteNote(deletingId)
   closeNoteModal()
+}
+
+async function loadNoteVersions(noteId: number) {
+  isVersionsLoading.value = true
+  versionsError.value = ''
+
+  try {
+    noteVersions.value = await fetchNoteVersions(noteId)
+  } catch (error) {
+    versionsError.value = error instanceof Error ? error.message : 'Не удалось загрузить историю версий'
+  } finally {
+    isVersionsLoading.value = false
+  }
+}
+
+async function restoreFromHistory(version: number) {
+  if (!openedNote.value) {
+    return
+  }
+
+  if (!window.confirm(`Восстановить версию ${version}?`)) {
+    return
+  }
+
+  const restored = await restoreNoteVersion({
+    noteId: openedNote.value.id,
+    version,
+  })
+
+  openedNote.value = restored
+  modalText.value = restored.text
+  await loadNoteVersions(restored.id)
+}
+
+function getVersionPreview(text: string): string {
+  const normalized = text.replace(/\s+/g, ' ').trim()
+  return normalized.length > 90 ? `${normalized.slice(0, 90).trimEnd()}...` : normalized
 }
 </script>
 
@@ -562,6 +611,7 @@ async function deleteModalNote() {
         <div>
           <h3 :class="[mainTextClass, 'text-base font-semibold']">Полная заметка</h3>
           <p :class="[mutedTextClass, 'text-xs']">{{ formatNoteDate(openedNote.createdAt) }}</p>
+          <p :class="[mutedTextClass, 'text-xs']">Текущая версия: v{{ openedNote.version }}</p>
         </div>
         <button
           type="button"
@@ -587,6 +637,35 @@ async function deleteModalNote() {
       <p :class="[mutedTextClass, 'mb-2 text-[11px]']">
         Подсказка: Ctrl+Enter сохраняет изменения в заметке.
       </p>
+
+      <div :class="[subtleSurfaceClass, 'mb-3 rounded-xl border p-2.5']">
+        <p :class="[mainTextClass, 'mb-2 text-xs font-semibold']">История версий</p>
+        <p v-if="isVersionsLoading" :class="[mutedTextClass, 'text-[11px]']">Загрузка...</p>
+        <p v-else-if="versionsError" class="text-[11px] text-rose-500">{{ versionsError }}</p>
+        <ul v-else-if="noteVersions.length > 0" class="max-h-32 space-y-1 overflow-y-auto pr-1">
+          <li
+            v-for="versionItem in noteVersions"
+            :key="versionItem.version"
+            class="flex items-center justify-between gap-2"
+          >
+            <div class="min-w-0">
+              <p :class="[mainTextClass, 'truncate text-[11px] font-medium']">{{ getVersionPreview(versionItem.text) }}</p>
+              <p :class="[mutedTextClass, 'truncate text-[10px]']">
+                v{{ versionItem.version }} • {{ formatNoteDate(versionItem.createdAt) }}
+              </p>
+            </div>
+            <button
+              type="button"
+              :disabled="isRestoringVersion || versionItem.version === openedNote.version"
+              :class="[neutralButtonClass, 'cursor-pointer rounded-md border px-2 py-1 text-[10px] transition disabled:cursor-not-allowed disabled:opacity-50']"
+              @click="restoreFromHistory(versionItem.version)"
+            >
+              Восстановить
+            </button>
+          </li>
+        </ul>
+        <p v-else :class="[mutedTextClass, 'text-[11px]']">История пока пустая.</p>
+      </div>
 
       <div class="flex flex-wrap justify-end gap-1.5">
         <button

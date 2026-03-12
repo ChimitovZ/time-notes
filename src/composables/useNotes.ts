@@ -8,6 +8,7 @@ const noteSchema = z.object({
   id: z.number(),
   text: z.string(),
   createdAt: z.string(),
+  version: z.number().int().min(1),
 })
 const groupSchema = z.object({
   id: z.number(),
@@ -17,7 +18,13 @@ const groupSchema = z.object({
 })
 
 const notesSchema = z.array(noteSchema)
+const noteVersionSchema = z.object({
+  version: z.number().int().min(1),
+  text: z.string(),
+  createdAt: z.string(),
+})
 const groupsSchema = z.array(groupSchema)
+const noteVersionsSchema = z.array(noteVersionSchema)
 const paginatedNotesSchema = z.object({
   items: notesSchema,
   total: z.number().int().min(0),
@@ -36,6 +43,7 @@ const createGroupSchema = z.object({
 })
 
 export type Note = z.infer<typeof noteSchema>
+export type NoteVersion = z.infer<typeof noteVersionSchema>
 export type NoteGroup = z.infer<typeof groupSchema>
 export type PaginatedNotes = z.infer<typeof paginatedNotesSchema>
 
@@ -139,6 +147,28 @@ async function createGroup(payload: { name: string; noteIds: number[] }): Promis
   return parsedOutput.data
 }
 
+async function fetchNoteVersions(noteId: number): Promise<NoteVersion[]> {
+  const response = await http.get(`/notes/${noteId}/versions`)
+  const parsed = noteVersionsSchema.safeParse(response.data)
+
+  if (!parsed.success) {
+    throw new Error('Сервер вернул историю версий в неверном формате')
+  }
+
+  return parsed.data
+}
+
+async function restoreNoteVersion(payload: { noteId: number; version: number }): Promise<Note> {
+  const response = await http.post(`/notes/${payload.noteId}/versions/${payload.version}/restore`)
+  const parsed = noteSchema.safeParse(response.data)
+
+  if (!parsed.success) {
+    throw new Error('Сервер вернул данные в неверном формате')
+  }
+
+  return parsed.data
+}
+
 export function formatNoteDate(value: string): string {
   const parsed = new Date(value)
 
@@ -208,6 +238,12 @@ export function useNotes(
       await queryClient.invalidateQueries({ queryKey: ['groups'] })
     },
   })
+  const restoreVersionMutation = useMutation({
+    mutationFn: restoreNoteVersion,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['notes'] })
+    },
+  })
 
   const notesCount = computed(() => query.data.value?.total ?? 0)
   const notes = computed(() => query.data.value?.items ?? [])
@@ -222,11 +258,14 @@ export function useNotes(
     deleteNote: deleteMutation.mutateAsync,
     improveText: improveMutation.mutateAsync,
     createGroup: createGroupMutation.mutateAsync,
+    fetchNoteVersions,
+    restoreNoteVersion: restoreVersionMutation.mutateAsync,
     isCreating: createMutation.isPending,
     isUpdating: updateMutation.isPending,
     isDeleting: deleteMutation.isPending,
     isImproving: improveMutation.isPending,
     isCreatingGroup: createGroupMutation.isPending,
+    isRestoringVersion: restoreVersionMutation.isPending,
     isGroupsLoading: groupsQuery.isLoading,
     notesCount,
   }

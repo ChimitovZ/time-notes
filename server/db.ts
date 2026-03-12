@@ -18,6 +18,25 @@ db.exec(`
   )
 `)
 
+const notesColumns = db
+  .prepare("SELECT name FROM pragma_table_info('notes')")
+  .all() as Array<{ name: string }>
+if (!notesColumns.some((column) => column.name === 'version')) {
+  db.exec('ALTER TABLE notes ADD COLUMN version INTEGER NOT NULL DEFAULT 1')
+}
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS note_versions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    note_id INTEGER NOT NULL,
+    version INTEGER NOT NULL,
+    text TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE CASCADE,
+    UNIQUE(note_id, version)
+  )
+`)
+
 db.exec(`
   CREATE TABLE IF NOT EXISTS note_groups (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
