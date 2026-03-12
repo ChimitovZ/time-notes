@@ -17,11 +17,13 @@ const {
   error,
   isCreating,
   isUpdating,
+  isDeleting,
   isImproving,
   isCreatingGroup,
   isGroupsLoading,
   createNote,
   updateNote,
+  deleteNote,
   improveText,
   createGroup,
   notesCount,
@@ -204,6 +206,25 @@ async function saveModalNote() {
   }
 
   await updateNote({ id: openedNote.value.id, text: modalText.value })
+  closeNoteModal()
+}
+
+async function deleteModalNote() {
+  if (!openedNote.value) {
+    return
+  }
+
+  if (!window.confirm('Удалить заметку?')) {
+    return
+  }
+
+  const deletingId = openedNote.value.id
+
+  if (notes.value.length === 1 && currentPage.value > 1) {
+    currentPage.value -= 1
+  }
+  selectedNoteIds.value = selectedNoteIds.value.filter((id) => id !== deletingId)
+  await deleteNote(deletingId)
   closeNoteModal()
 }
 </script>
@@ -568,6 +589,18 @@ async function saveModalNote() {
       </p>
 
       <div class="flex flex-wrap justify-end gap-1.5">
+        <button
+          type="button"
+          :disabled="isDeleting"
+          :class="
+            isLightTheme
+              ? 'cursor-pointer rounded-xl border border-rose-300/70 bg-rose-100 px-3 py-1.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-200 disabled:cursor-not-allowed disabled:opacity-50'
+              : 'cursor-pointer rounded-xl border border-rose-300/30 bg-rose-400/10 px-3 py-1.5 text-xs font-semibold text-rose-200 transition hover:bg-rose-400/20 disabled:cursor-not-allowed disabled:opacity-50'
+          "
+          @click="deleteModalNote"
+        >
+          {{ isDeleting ? 'Удаляю...' : 'Удалить' }}
+        </button>
         <button
           type="button"
           :disabled="isImproving || !modalText.trim()"
