@@ -78,7 +78,6 @@ function handleEditingInput(event: Event) {
     <div class="mb-3 flex items-center justify-between">
       <h2 class="text-sm font-semibold sm:text-base">Последние заметки</h2>
       <div class="flex items-center gap-2">
-        <p :class="[mutedTextClass, 'text-[11px]']">Выбрано: {{ selectedNotesCount }}</p>
         <label :class="[mutedTextClass, 'flex items-center gap-2 text-xs']">
           <span>Показывать</span>
           <input
