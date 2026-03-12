@@ -13,7 +13,7 @@ import {
 import { useUiStore } from '@/stores/ui'
 
 const uiStore = useUiStore()
-const { notesPerPage, densityClass, themeMode, timeDisplayMode } = storeToRefs(uiStore)
+const { notesPerPage, densityClass, timeDisplayMode } = storeToRefs(uiStore)
 const currentPage = ref(1)
 const selectedGroupId = ref<number | null>(null)
 const {
@@ -79,72 +79,24 @@ const sortedNoteComments = computed(() =>
 const activeGroupName = computed(
   () => groups.value.find((group) => group.id === selectedGroupId.value)?.name ?? '',
 )
-const isGraphiteTheme = computed(() => themeMode.value === 'graphite')
-const isPastelTheme = computed(() => themeMode.value === 'pastel')
-const isLightTheme = computed(() => !isGraphiteTheme.value)
-
-const surfaceClass = computed(() =>
-  isGraphiteTheme.value
-    ? 'border-white/10 bg-white/5 text-slate-100'
-    : isPastelTheme.value
-      ? 'border-[#cdb4db]/70 bg-[#fff9fd] text-[#5f4b70]'
-      : 'border-slate-200 bg-white text-slate-900',
-)
-const subtleSurfaceClass = computed(() =>
-  isGraphiteTheme.value
-    ? 'border-white/10 bg-slate-900/40 text-slate-400'
-    : isPastelTheme.value
-      ? 'border-[#ffc8dd]/70 bg-[#fff1f8] text-[#7e638f]'
-      : 'border-slate-200 bg-slate-50 text-slate-700',
-)
-const inputClass = computed(() =>
-  isGraphiteTheme.value
-    ? 'border-white/10 bg-slate-900 text-slate-100 placeholder:text-slate-500 focus:border-cyan-300/50'
-    : isPastelTheme.value
-      ? 'border-[#cdb4db]/70 bg-white text-[#5f4b70] placeholder:text-[#aa93b7] focus:border-[#a2d2ff]'
-      : 'border-slate-300 bg-white text-slate-900 placeholder:text-slate-400 focus:border-cyan-500/60',
-)
-const noteCardClass = computed(() =>
-  isGraphiteTheme.value
-    ? 'border-white/10 bg-slate-900/60'
-    : isPastelTheme.value
-      ? 'border-[#ffc8dd]/70 bg-[#fff7fb]'
-      : 'border-slate-200 bg-slate-50/70',
-)
-const mutedTextClass = computed(() =>
-  isGraphiteTheme.value ? 'text-slate-400' : isPastelTheme.value ? 'text-[#8e739f]' : 'text-slate-500',
-)
-const mainTextClass = computed(() =>
-  isGraphiteTheme.value ? 'text-slate-100' : isPastelTheme.value ? 'text-[#5f4b70]' : 'text-slate-900',
-)
-const neutralButtonClass = computed(() =>
-  isGraphiteTheme.value
-    ? 'border-white/15 text-slate-300 hover:border-white/30'
-    : isPastelTheme.value
-      ? 'border-[#cdb4db]/80 text-[#6d577e] hover:border-[#a2d2ff] hover:bg-[#f2f8ff]'
-      : 'border-slate-300 text-slate-700 hover:border-slate-400',
-)
-const checkboxClass = computed(() =>
-  isGraphiteTheme.value
-    ? 'size-3.5 cursor-pointer accent-cyan-400'
-    : isPastelTheme.value
-      ? 'size-3.5 cursor-pointer accent-[#a2d2ff]'
-      : 'size-3.5 cursor-pointer accent-cyan-500',
-)
-const selectedGroupButtonClass = computed(() =>
-  isGraphiteTheme.value
-    ? 'border-cyan-300/40 bg-cyan-400/10 text-cyan-200'
-    : isPastelTheme.value
-      ? 'border-[#a2d2ff]/80 bg-[#eaf5ff] text-[#4f7396]'
-      : 'border-cyan-300/60 bg-cyan-50 text-cyan-700',
-)
-const modalSurfaceClass = computed(() =>
-  isGraphiteTheme.value
-    ? 'border-zinc-700 bg-zinc-900 text-slate-100'
-    : isPastelTheme.value
-      ? 'border-[#cdb4db]/70 bg-[#fff9fd] text-[#5f4b70]'
-      : 'border-slate-200 bg-white text-slate-900',
-)
+const surfaceClass = computed(() => 'theme-surface')
+const subtleSurfaceClass = computed(() => 'theme-subtle')
+const inputClass = computed(() => 'theme-input')
+const noteCardClass = computed(() => 'theme-note-card')
+const mutedTextClass = computed(() => 'theme-text-muted')
+const mainTextClass = computed(() => 'theme-text-main')
+const neutralButtonClass = computed(() => 'theme-btn-neutral')
+const checkboxClass = computed(() => 'theme-checkbox size-3.5 cursor-pointer')
+const selectedGroupButtonClass = computed(() => 'theme-btn-selected')
+const modalSurfaceClass = computed(() => 'theme-modal-surface')
+const primaryButtonClass = computed(() => 'theme-btn-primary')
+const aiButtonClass = computed(() => 'theme-btn-ai')
+const dangerButtonClass = computed(() => 'theme-btn-danger')
+const groupButtonClass = computed(() => 'theme-btn-group')
+const statCardClass = computed(() => 'theme-stat-card')
+const statValueClass = computed(() => 'theme-stat-value')
+const statCaptionClass = computed(() => 'theme-stat-caption')
+const modalOverlayClass = computed(() => 'theme-modal-overlay')
 const now = useNow({ interval: 60_000 })
 
 watch(notesPerPage, () => {
@@ -456,11 +408,7 @@ async function removeComment(commentId: number) {
           <button
             type="button"
             :disabled="isImproving || !noteInput.trim()"
-            :class="
-              isLightTheme
-                ? 'cursor-pointer rounded-xl border border-violet-300/70 bg-violet-100 px-3 py-1.5 text-xs font-semibold text-violet-800 transition hover:bg-violet-200 disabled:cursor-not-allowed disabled:opacity-50'
-                : 'cursor-pointer rounded-xl border border-violet-300/30 bg-violet-400/10 px-3 py-1.5 text-xs font-semibold text-violet-200 transition hover:bg-violet-400/20 disabled:cursor-not-allowed disabled:opacity-50'
-            "
+            :class="[aiButtonClass, 'cursor-pointer rounded-xl border px-3 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50']"
             @click="improveCreateText"
           >
             {{ isImproving ? 'Улучшаю...' : 'Улучшить текст ИИ' }}
@@ -468,11 +416,7 @@ async function removeComment(commentId: number) {
           <button
             type="submit"
             :disabled="isCreating || !noteInput.trim()"
-            :class="
-              isLightTheme
-                ? 'cursor-pointer rounded-xl border border-cyan-300/70 bg-cyan-100 px-3 py-1.5 text-xs font-semibold text-cyan-800 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-50'
-                : 'cursor-pointer rounded-xl border border-cyan-300/30 bg-cyan-400/10 px-3 py-1.5 text-xs font-semibold text-cyan-200 transition hover:bg-cyan-400/20 disabled:cursor-not-allowed disabled:opacity-50'
-            "
+            :class="[primaryButtonClass, 'cursor-pointer rounded-xl border px-3 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50']"
           >
             {{ isCreating ? 'Сохраняю...' : 'Сохранить заметку' }}
           </button>
@@ -484,11 +428,7 @@ async function removeComment(commentId: number) {
       </div>
       <div
         v-else-if="isError"
-        :class="
-          isLightTheme
-            ? 'rounded-xl border border-rose-300/80 bg-rose-50 px-3 py-2 text-xs text-rose-700'
-            : 'rounded-xl border border-rose-400/30 bg-rose-400/10 px-3 py-2 text-xs text-rose-200'
-        "
+        class="theme-error rounded-xl border px-3 py-2 text-xs"
       >
         {{ error?.message ?? 'Не удалось загрузить заметки' }}
       </div>
@@ -551,11 +491,7 @@ async function removeComment(commentId: number) {
               <button
                 type="button"
                 :disabled="isImproving || !editingText.trim()"
-                :class="
-                  isLightTheme
-                    ? 'cursor-pointer rounded-lg border border-violet-300/70 bg-violet-100 px-2 py-1 text-[11px] font-semibold text-violet-800 transition hover:bg-violet-200 disabled:cursor-not-allowed disabled:opacity-50'
-                    : 'cursor-pointer rounded-lg border border-violet-300/30 bg-violet-400/10 px-2 py-1 text-[11px] font-semibold text-violet-200 transition hover:bg-violet-400/20 disabled:cursor-not-allowed disabled:opacity-50'
-                "
+                :class="[aiButtonClass, 'cursor-pointer rounded-lg border px-2 py-1 text-[11px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-50']"
                 @click="improveEditingText"
               >
                 {{ isImproving ? 'Улучшаю...' : 'ИИ улучшить' }}
@@ -573,11 +509,7 @@ async function removeComment(commentId: number) {
               <button
                 type="submit"
                 :disabled="isUpdating || !editingText.trim()"
-                :class="
-                  isLightTheme
-                    ? 'cursor-pointer rounded-lg border border-cyan-300/70 bg-cyan-100 px-2 py-1 text-[11px] font-semibold text-cyan-800 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-50'
-                    : 'cursor-pointer rounded-lg border border-cyan-300/30 bg-cyan-400/10 px-2 py-1 text-[11px] font-semibold text-cyan-200 transition hover:bg-cyan-400/20 disabled:cursor-not-allowed disabled:opacity-50'
-                "
+                :class="[primaryButtonClass, 'cursor-pointer rounded-lg border px-2 py-1 text-[11px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-50']"
               >
                 {{ isUpdating ? 'Сохр...' : 'Сохранить' }}
               </button>
@@ -635,22 +567,12 @@ async function removeComment(commentId: number) {
       <article :class="[surfaceClass, 'rounded-2xl border p-3 sm:p-4']">
         <h3 class="mb-2 text-sm font-semibold">Статистика</h3>
         <div
-          :class="
-            isLightTheme
-              ? 'rounded-xl border border-cyan-300/50 bg-cyan-50 px-3 py-3 text-left'
-              : 'rounded-xl border border-cyan-400/30 bg-cyan-400/10 px-3 py-3 text-left'
-          "
+          :class="[statCardClass, 'rounded-xl border px-3 py-3 text-left']"
         >
-          <p
-            :class="
-              isLightTheme
-                ? 'text-2xl font-semibold text-cyan-700'
-                : 'text-2xl font-semibold text-cyan-200'
-            "
-          >
+          <p :class="[statValueClass, 'text-2xl font-semibold']">
             {{ notesCount }}
           </p>
-          <p :class="isLightTheme ? 'text-xs text-cyan-700/80' : 'text-xs text-cyan-100/80'">
+          <p :class="[statCaptionClass, 'text-xs']">
             {{ selectedGroupId ? `В группе "${activeGroupName}"` : 'Всего заметок в базе' }}
           </p>
         </div>
@@ -683,11 +605,7 @@ async function removeComment(commentId: number) {
             <button
               type="button"
               :disabled="isCreatingGroup || selectedNotesCount === 0 || !groupNameInput.trim()"
-              :class="
-                isLightTheme
-                  ? 'cursor-pointer rounded-lg border border-amber-300/70 bg-amber-100 px-2.5 py-1.5 text-xs font-semibold text-amber-800 transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-50'
-                  : 'cursor-pointer rounded-lg border border-amber-300/30 bg-amber-400/10 px-2.5 py-1.5 text-xs font-semibold text-amber-200 transition hover:bg-amber-400/20 disabled:cursor-not-allowed disabled:opacity-50'
-              "
+              :class="[groupButtonClass, 'cursor-pointer rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50']"
               @click="submitCreateGroup"
             >
               {{ isCreatingGroup ? 'Создаю...' : 'Создать группу' }}
@@ -701,9 +619,7 @@ async function removeComment(commentId: number) {
             :class="
               selectedGroupId === null
                 ? selectedGroupButtonClass
-                : isLightTheme
-                  ? 'border-slate-300 text-slate-700 hover:border-slate-400'
-                  : 'border-white/15 text-slate-300 hover:border-white/30'
+                : neutralButtonClass
             "
             @click="switchGroup(null)"
           >
@@ -716,9 +632,7 @@ async function removeComment(commentId: number) {
               :class="
                 selectedGroupId === group.id
                   ? selectedGroupButtonClass
-                  : isLightTheme
-                    ? 'border-slate-300 text-slate-700 hover:border-slate-400'
-                    : 'border-white/15 text-slate-300 hover:border-white/30'
+                  : neutralButtonClass
               "
               @click="switchGroup(group.id)"
             >
@@ -727,11 +641,7 @@ async function removeComment(commentId: number) {
             <button
               type="button"
               :disabled="isDeletingGroup"
-              :class="
-                isLightTheme
-                  ? 'cursor-pointer rounded-lg border border-rose-300/70 bg-rose-100 px-2 py-1 text-[10px] font-medium text-rose-700 transition hover:bg-rose-200 disabled:cursor-not-allowed disabled:opacity-50'
-                  : 'cursor-pointer rounded-lg border border-rose-300/30 bg-rose-400/10 px-2 py-1 text-[10px] font-medium text-rose-200 transition hover:bg-rose-400/20 disabled:cursor-not-allowed disabled:opacity-50'
-              "
+              :class="[dangerButtonClass, 'cursor-pointer rounded-lg border px-2 py-1 text-[10px] font-medium transition disabled:cursor-not-allowed disabled:opacity-50']"
               @click="removeGroup(group.id)"
             >
               {{ isDeletingGroup ? '...' : 'Удал.' }}
@@ -755,11 +665,7 @@ async function removeComment(commentId: number) {
 
   <div
     v-if="openedNote"
-    :class="
-      isLightTheme
-        ? 'fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4'
-        : 'fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4'
-    "
+    :class="[modalOverlayClass, 'fixed inset-0 z-50 flex items-center justify-center p-4']"
     @click.self="closeNoteModal"
   >
     <div :class="[modalSurfaceClass, 'w-full max-w-2xl rounded-2xl border p-4 shadow-xl']">
@@ -842,11 +748,7 @@ async function removeComment(commentId: number) {
             <button
               type="submit"
               :disabled="isCreatingComment || !newCommentText.trim()"
-              :class="
-                isLightTheme
-                  ? 'cursor-pointer rounded-lg border border-cyan-300/70 bg-cyan-100 px-2.5 py-1 text-[11px] font-semibold text-cyan-800 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-50'
-                  : 'cursor-pointer rounded-lg border border-cyan-300/30 bg-cyan-400/10 px-2.5 py-1 text-[11px] font-semibold text-cyan-200 transition hover:bg-cyan-400/20 disabled:cursor-not-allowed disabled:opacity-50'
-              "
+              :class="[primaryButtonClass, 'cursor-pointer rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-50']"
             >
               {{ isCreatingComment ? 'Добавляю...' : 'Добавить' }}
             </button>
@@ -877,11 +779,7 @@ async function removeComment(commentId: number) {
                   <button
                     type="button"
                     :disabled="isDeletingComment"
-                    :class="
-                      isLightTheme
-                        ? 'cursor-pointer rounded-md border border-rose-300/70 bg-rose-100 px-2 py-0.5 text-[10px] font-medium text-rose-700 transition hover:bg-rose-200 disabled:cursor-not-allowed disabled:opacity-50'
-                        : 'cursor-pointer rounded-md border border-rose-300/30 bg-rose-400/10 px-2 py-0.5 text-[10px] font-medium text-rose-200 transition hover:bg-rose-400/20 disabled:cursor-not-allowed disabled:opacity-50'
-                    "
+                    :class="[dangerButtonClass, 'cursor-pointer rounded-md border px-2 py-0.5 text-[10px] font-medium transition disabled:cursor-not-allowed disabled:opacity-50']"
                     @click="removeComment(comment.id)"
                   >
                     Удал.
@@ -906,11 +804,7 @@ async function removeComment(commentId: number) {
                 <button
                   type="submit"
                   :disabled="isUpdatingComment || !editingCommentText.trim()"
-                  :class="
-                    isLightTheme
-                      ? 'cursor-pointer rounded-md border border-cyan-300/70 bg-cyan-100 px-2 py-0.5 text-[10px] font-semibold text-cyan-800 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-50'
-                      : 'cursor-pointer rounded-md border border-cyan-300/30 bg-cyan-400/10 px-2 py-0.5 text-[10px] font-semibold text-cyan-200 transition hover:bg-cyan-400/20 disabled:cursor-not-allowed disabled:opacity-50'
-                  "
+                  :class="[primaryButtonClass, 'cursor-pointer rounded-md border px-2 py-0.5 text-[10px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-50']"
                 >
                   {{ isUpdatingComment ? 'Сохр...' : 'Сохранить' }}
                 </button>
@@ -925,11 +819,7 @@ async function removeComment(commentId: number) {
         <button
           type="button"
           :disabled="isDeleting"
-          :class="
-            isLightTheme
-              ? 'cursor-pointer rounded-xl border border-rose-300/70 bg-rose-100 px-3 py-1.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-200 disabled:cursor-not-allowed disabled:opacity-50'
-              : 'cursor-pointer rounded-xl border border-rose-300/30 bg-rose-400/10 px-3 py-1.5 text-xs font-semibold text-rose-200 transition hover:bg-rose-400/20 disabled:cursor-not-allowed disabled:opacity-50'
-          "
+          :class="[dangerButtonClass, 'cursor-pointer rounded-xl border px-3 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50']"
           @click="deleteModalNote"
         >
           {{ isDeleting ? 'Удаляю...' : 'Удалить' }}
@@ -937,11 +827,7 @@ async function removeComment(commentId: number) {
         <button
           type="button"
           :disabled="isImproving || !modalText.trim()"
-          :class="
-            isLightTheme
-              ? 'cursor-pointer rounded-xl border border-violet-300/70 bg-violet-100 px-3 py-1.5 text-xs font-semibold text-violet-800 transition hover:bg-violet-200 disabled:cursor-not-allowed disabled:opacity-50'
-              : 'cursor-pointer rounded-xl border border-violet-300/30 bg-violet-400/10 px-3 py-1.5 text-xs font-semibold text-violet-200 transition hover:bg-violet-400/20 disabled:cursor-not-allowed disabled:opacity-50'
-          "
+          :class="[aiButtonClass, 'cursor-pointer rounded-xl border px-3 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50']"
           @click="improveModalText"
         >
           {{ isImproving ? 'Улучшаю...' : 'Улучшить ИИ' }}
@@ -949,11 +835,7 @@ async function removeComment(commentId: number) {
         <button
           type="button"
           :disabled="isUpdating || !modalText.trim()"
-          :class="
-            isLightTheme
-              ? 'cursor-pointer rounded-xl border border-cyan-300/70 bg-cyan-100 px-3 py-1.5 text-xs font-semibold text-cyan-800 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-50'
-              : 'cursor-pointer rounded-xl border border-cyan-300/30 bg-cyan-400/10 px-3 py-1.5 text-xs font-semibold text-cyan-200 transition hover:bg-cyan-400/20 disabled:cursor-not-allowed disabled:opacity-50'
-          "
+          :class="[primaryButtonClass, 'cursor-pointer rounded-xl border px-3 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50']"
           @click="saveModalNote"
         >
           {{ isUpdating ? 'Сохр...' : 'Сохранить' }}
