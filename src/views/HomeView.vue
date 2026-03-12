@@ -58,6 +58,7 @@ const modalText = ref('')
 const noteVersions = ref<NoteVersion[]>([])
 const isVersionsLoading = ref(false)
 const versionsError = ref('')
+const isVersionsPanelOpen = ref(false)
 const noteComments = ref<NoteComment[]>([])
 const isCommentsLoading = ref(false)
 const commentsError = ref('')
@@ -215,7 +216,7 @@ function switchGroup(groupId: number | null) {
 function openNoteModal(note: Note) {
   openedNote.value = note
   modalText.value = note.text
-  void loadNoteVersions(note.id)
+  isVersionsPanelOpen.value = false
   void loadNoteComments(note.id)
 }
 
@@ -225,6 +226,7 @@ function closeNoteModal() {
   noteVersions.value = []
   versionsError.value = ''
   isVersionsLoading.value = false
+  isVersionsPanelOpen.value = false
   noteComments.value = []
   commentsError.value = ''
   isCommentsLoading.value = false
@@ -277,6 +279,20 @@ async function loadNoteVersions(noteId: number) {
     versionsError.value = error instanceof Error ? error.message : 'Не удалось загрузить историю версий'
   } finally {
     isVersionsLoading.value = false
+  }
+}
+
+function toggleVersionsPanel() {
+  isVersionsPanelOpen.value = !isVersionsPanelOpen.value
+
+  if (
+    isVersionsPanelOpen.value &&
+    openedNote.value &&
+    !isVersionsLoading.value &&
+    noteVersions.value.length === 0 &&
+    !versionsError.value
+  ) {
+    void loadNoteVersions(openedNote.value.id)
   }
 }
 
@@ -668,7 +684,7 @@ async function removeComment(commentId: number) {
     :class="[modalOverlayClass, 'fixed inset-0 z-50 flex items-center justify-center p-4']"
     @click.self="closeNoteModal"
   >
-    <div :class="[modalSurfaceClass, 'w-full max-w-2xl rounded-2xl border p-4 shadow-xl']">
+    <div :class="[modalSurfaceClass, 'w-full max-w-5xl rounded-2xl border p-4 shadow-xl']">
       <div class="mb-3 flex items-start justify-between gap-3">
         <div>
           <h3 :class="[mainTextClass, 'text-base font-semibold']">Полная заметка</h3>
@@ -689,157 +705,176 @@ async function removeComment(commentId: number) {
         </button>
       </div>
 
-      <textarea
-        v-model="modalText"
-        rows="10"
-        :class="[
-          inputClass,
-          'mb-2 w-full resize-y rounded-xl border px-3 py-2 text-sm outline-none',
-        ]"
-        @keydown.ctrl.enter.prevent="saveModalNote"
-      />
-      <p :class="[mutedTextClass, 'mb-2 text-[11px]']">
-        Подсказка: Ctrl+Enter сохраняет изменения в заметке.
-      </p>
-
-      <div :class="[subtleSurfaceClass, 'mb-3 rounded-xl border p-2.5']">
-        <p :class="[mainTextClass, 'mb-2 text-xs font-semibold']">История версий</p>
-        <p v-if="isVersionsLoading" :class="[mutedTextClass, 'text-[11px]']">Загрузка...</p>
-        <p v-else-if="versionsError" class="text-[11px] text-rose-500">{{ versionsError }}</p>
-        <ul v-else-if="noteVersions.length > 0" class="max-h-32 space-y-1 overflow-y-auto pr-1">
-          <li
-            v-for="versionItem in noteVersions"
-            :key="versionItem.version"
-            class="flex items-center justify-between gap-2"
-          >
-            <div class="min-w-0">
-              <p :class="[mainTextClass, 'truncate text-[11px] font-medium']">{{ getVersionPreview(versionItem.text) }}</p>
-              <p
-                :class="[mutedTextClass, 'truncate text-[10px]']"
-                :title="formatAbsoluteDate(versionItem.createdAt)"
-              >
-                v{{ versionItem.version }} • {{ formatUiDate(versionItem.createdAt) }}
-              </p>
-            </div>
-            <button
-              type="button"
-              :disabled="isRestoringVersion || versionItem.version === openedNote.version"
-              :class="[neutralButtonClass, 'cursor-pointer rounded-md border px-2 py-1 text-[10px] transition disabled:cursor-not-allowed disabled:opacity-50']"
-              @click="restoreFromHistory(versionItem.version)"
-            >
-              Восстановить
-            </button>
-          </li>
-        </ul>
-        <p v-else :class="[mutedTextClass, 'text-[11px]']">История пока пустая.</p>
-      </div>
-
-      <div :class="[subtleSurfaceClass, 'mb-3 rounded-xl border p-2.5']">
-        <p :class="[mainTextClass, 'mb-2 text-xs font-semibold']">Комментарии</p>
-        <form class="mb-2 space-y-1.5" @submit.prevent="submitComment">
+      <div class="grid gap-3 lg:grid-cols-[minmax(0,1fr)_280px]">
+        <div>
           <textarea
-            v-model="newCommentText"
-            rows="2"
-            placeholder="Добавьте комментарий..."
-            :class="[inputClass, 'w-full resize-y rounded-lg border px-2 py-1.5 text-xs outline-none']"
-            @keydown.ctrl.enter.prevent="submitComment"
+            v-model="modalText"
+            rows="10"
+            :class="[
+              inputClass,
+              'mb-2 w-full resize-y rounded-xl border px-3 py-2 text-sm outline-none',
+            ]"
+            @keydown.ctrl.enter.prevent="saveModalNote"
           />
-          <div class="flex justify-end">
-            <button
-              type="submit"
-              :disabled="isCreatingComment || !newCommentText.trim()"
-              :class="[primaryButtonClass, 'cursor-pointer rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-50']"
-            >
-              {{ isCreatingComment ? 'Добавляю...' : 'Добавить' }}
-            </button>
-          </div>
-        </form>
-        <p v-if="isCommentsLoading" :class="[mutedTextClass, 'text-[11px]']">Загрузка комментариев...</p>
-        <p v-else-if="commentsError" class="text-[11px] text-rose-500">{{ commentsError }}</p>
-        <ul v-else-if="sortedNoteComments.length > 0" class="max-h-40 space-y-1.5 overflow-y-auto pr-1">
-          <li
-            v-for="comment in sortedNoteComments"
-            :key="comment.id"
-            :class="[inputClass, 'rounded-lg border px-2 py-1.5']"
-          >
-            <div v-if="editingCommentId !== comment.id" class="space-y-1">
-              <p :class="[mainTextClass, 'text-[11px] leading-relaxed']">{{ comment.text }}</p>
-              <div class="flex items-center justify-between gap-2">
-                <p :class="[mutedTextClass, 'text-[10px]']" :title="formatAbsoluteDate(comment.createdAt)">
-                  {{ formatUiDate(comment.createdAt) }}
-                </p>
-                <div class="flex gap-1">
-                  <button
-                    type="button"
-                    :class="[neutralButtonClass, 'cursor-pointer rounded-md border px-2 py-0.5 text-[10px] transition']"
-                    @click="startEditComment(comment)"
-                  >
-                    Изм.
-                  </button>
-                  <button
-                    type="button"
-                    :disabled="isDeletingComment"
-                    :class="[dangerButtonClass, 'cursor-pointer rounded-md border px-2 py-0.5 text-[10px] font-medium transition disabled:cursor-not-allowed disabled:opacity-50']"
-                    @click="removeComment(comment.id)"
-                  >
-                    Удал.
-                  </button>
-                </div>
-              </div>
-            </div>
-            <form v-else class="space-y-1.5" @submit.prevent="saveCommentEdit(comment.id)">
+          <p :class="[mutedTextClass, 'mb-2 text-[11px]']">
+            Подсказка: Ctrl+Enter сохраняет изменения в заметке.
+          </p>
+
+          <div :class="[subtleSurfaceClass, 'mb-3 rounded-xl border p-2.5']">
+            <p :class="[mainTextClass, 'mb-2 text-xs font-semibold']">Комментарии</p>
+            <form class="mb-2 space-y-1.5" @submit.prevent="submitComment">
               <textarea
-                v-model="editingCommentText"
+                v-model="newCommentText"
                 rows="2"
-                :class="[inputClass, 'w-full resize-y rounded-md border px-2 py-1 text-[11px] outline-none']"
+                placeholder="Добавьте комментарий..."
+                :class="[inputClass, 'w-full resize-y rounded-lg border px-2 py-1.5 text-xs outline-none']"
+                @keydown.ctrl.enter.prevent="submitComment"
               />
-              <div class="flex justify-end gap-1">
-                <button
-                  type="button"
-                  :class="[neutralButtonClass, 'cursor-pointer rounded-md border px-2 py-0.5 text-[10px] transition']"
-                  @click="cancelEditComment"
-                >
-                  Отмена
-                </button>
+              <div class="flex justify-end">
                 <button
                   type="submit"
-                  :disabled="isUpdatingComment || !editingCommentText.trim()"
-                  :class="[primaryButtonClass, 'cursor-pointer rounded-md border px-2 py-0.5 text-[10px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-50']"
+                  :disabled="isCreatingComment || !newCommentText.trim()"
+                  :class="[primaryButtonClass, 'cursor-pointer rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-50']"
                 >
-                  {{ isUpdatingComment ? 'Сохр...' : 'Сохранить' }}
+                  {{ isCreatingComment ? 'Добавляю...' : 'Добавить' }}
                 </button>
               </div>
             </form>
-          </li>
-        </ul>
-        <p v-else :class="[mutedTextClass, 'text-[11px]']">Комментариев пока нет.</p>
-      </div>
+            <p v-if="isCommentsLoading" :class="[mutedTextClass, 'text-[11px]']">Загрузка комментариев...</p>
+            <p v-else-if="commentsError" class="text-[11px] text-rose-500">{{ commentsError }}</p>
+            <ul v-else-if="sortedNoteComments.length > 0" class="max-h-40 space-y-1.5 overflow-y-auto pr-1">
+              <li
+                v-for="comment in sortedNoteComments"
+                :key="comment.id"
+                :class="[inputClass, 'rounded-lg border px-2 py-1.5']"
+              >
+                <div v-if="editingCommentId !== comment.id" class="space-y-1">
+                  <p :class="[mainTextClass, 'text-[11px] leading-relaxed']">{{ comment.text }}</p>
+                  <div class="flex items-center justify-between gap-2">
+                    <p :class="[mutedTextClass, 'text-[10px]']" :title="formatAbsoluteDate(comment.createdAt)">
+                      {{ formatUiDate(comment.createdAt) }}
+                    </p>
+                    <div class="flex gap-1">
+                      <button
+                        type="button"
+                        :class="[neutralButtonClass, 'cursor-pointer rounded-md border px-2 py-0.5 text-[10px] transition']"
+                        @click="startEditComment(comment)"
+                      >
+                        Изм.
+                      </button>
+                      <button
+                        type="button"
+                        :disabled="isDeletingComment"
+                        :class="[dangerButtonClass, 'cursor-pointer rounded-md border px-2 py-0.5 text-[10px] font-medium transition disabled:cursor-not-allowed disabled:opacity-50']"
+                        @click="removeComment(comment.id)"
+                      >
+                        Удал.
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <form v-else class="space-y-1.5" @submit.prevent="saveCommentEdit(comment.id)">
+                  <textarea
+                    v-model="editingCommentText"
+                    rows="2"
+                    :class="[inputClass, 'w-full resize-y rounded-md border px-2 py-1 text-[11px] outline-none']"
+                  />
+                  <div class="flex justify-end gap-1">
+                    <button
+                      type="button"
+                      :class="[neutralButtonClass, 'cursor-pointer rounded-md border px-2 py-0.5 text-[10px] transition']"
+                      @click="cancelEditComment"
+                    >
+                      Отмена
+                    </button>
+                    <button
+                      type="submit"
+                      :disabled="isUpdatingComment || !editingCommentText.trim()"
+                      :class="[primaryButtonClass, 'cursor-pointer rounded-md border px-2 py-0.5 text-[10px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-50']"
+                    >
+                      {{ isUpdatingComment ? 'Сохр...' : 'Сохранить' }}
+                    </button>
+                  </div>
+                </form>
+              </li>
+            </ul>
+            <p v-else :class="[mutedTextClass, 'text-[11px]']">Комментариев пока нет.</p>
+          </div>
 
-      <div class="flex flex-wrap justify-end gap-1.5">
-        <button
-          type="button"
-          :disabled="isDeleting"
-          :class="[dangerButtonClass, 'cursor-pointer rounded-xl border px-3 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50']"
-          @click="deleteModalNote"
-        >
-          {{ isDeleting ? 'Удаляю...' : 'Удалить' }}
-        </button>
-        <button
-          type="button"
-          :disabled="isImproving || !modalText.trim()"
-          :class="[aiButtonClass, 'cursor-pointer rounded-xl border px-3 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50']"
-          @click="improveModalText"
-        >
-          {{ isImproving ? 'Улучшаю...' : 'Улучшить ИИ' }}
-        </button>
-        <button
-          type="button"
-          :disabled="isUpdating || !modalText.trim()"
-          :class="[primaryButtonClass, 'cursor-pointer rounded-xl border px-3 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50']"
-          @click="saveModalNote"
-        >
-          {{ isUpdating ? 'Сохр...' : 'Сохранить' }}
-        </button>
+          <div class="flex flex-wrap justify-end gap-1.5">
+            <button
+              type="button"
+              :disabled="isDeleting"
+              :class="[dangerButtonClass, 'cursor-pointer rounded-xl border px-3 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50']"
+              @click="deleteModalNote"
+            >
+              {{ isDeleting ? 'Удаляю...' : 'Удалить' }}
+            </button>
+            <button
+              type="button"
+              :disabled="isImproving || !modalText.trim()"
+              :class="[aiButtonClass, 'cursor-pointer rounded-xl border px-3 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50']"
+              @click="improveModalText"
+            >
+              {{ isImproving ? 'Улучшаю...' : 'Улучшить ИИ' }}
+            </button>
+            <button
+              type="button"
+              :disabled="isUpdating || !modalText.trim()"
+              :class="[primaryButtonClass, 'cursor-pointer rounded-xl border px-3 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50']"
+              @click="saveModalNote"
+            >
+              {{ isUpdating ? 'Сохр...' : 'Сохранить' }}
+            </button>
+          </div>
+        </div>
+
+        <aside class="space-y-2">
+          <button
+            type="button"
+            :class="[neutralButtonClass, 'w-full cursor-pointer rounded-xl border px-3 py-2 text-xs font-semibold transition']"
+            @click="toggleVersionsPanel"
+          >
+            {{ isVersionsPanelOpen ? 'Скрыть историю версий' : 'Показать историю версий' }}
+          </button>
+
+          <div
+            v-if="isVersionsPanelOpen"
+            :class="[subtleSurfaceClass, 'rounded-xl border p-2.5']"
+          >
+            <p :class="[mainTextClass, 'mb-2 text-xs font-semibold']">История версий</p>
+            <p v-if="isVersionsLoading" :class="[mutedTextClass, 'text-[11px]']">Загрузка...</p>
+            <p v-else-if="versionsError" class="text-[11px] text-rose-500">{{ versionsError }}</p>
+            <ul v-else-if="noteVersions.length > 0" class="max-h-80 space-y-1 overflow-y-auto pr-1">
+              <li
+                v-for="versionItem in noteVersions"
+                :key="versionItem.version"
+                class="flex items-center justify-between gap-2"
+              >
+                <div class="min-w-0">
+                  <p :class="[mainTextClass, 'truncate text-[11px] font-medium']">
+                    {{ getVersionPreview(versionItem.text) }}
+                  </p>
+                  <p
+                    :class="[mutedTextClass, 'truncate text-[10px]']"
+                    :title="formatAbsoluteDate(versionItem.createdAt)"
+                  >
+                    v{{ versionItem.version }} • {{ formatUiDate(versionItem.createdAt) }}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  :disabled="isRestoringVersion || versionItem.version === openedNote.version"
+                  :class="[neutralButtonClass, 'cursor-pointer rounded-md border px-2 py-1 text-[10px] transition disabled:cursor-not-allowed disabled:opacity-50']"
+                  @click="restoreFromHistory(versionItem.version)"
+                >
+                  Восст.
+                </button>
+              </li>
+            </ul>
+            <p v-else :class="[mutedTextClass, 'text-[11px]']">История пока пустая.</p>
+          </div>
+        </aside>
       </div>
     </div>
   </div>
