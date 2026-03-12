@@ -2,20 +2,22 @@ import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { useStorage } from '@vueuse/core'
 
+type ThemeMode = 'light' | 'graphite'
+
 export const useUiStore = defineStore('ui', () => {
-  const compactMode = useStorage('ui:compact-mode', true)
+  const themeMode = useStorage<ThemeMode>('ui:theme-mode', 'light')
   const notesPerPage = ref(8)
 
-  const densityClass = computed(() => (compactMode.value ? 'py-2' : 'py-3.5'))
+  const densityClass = computed(() => 'py-2')
 
-  function toggleCompactMode() {
-    compactMode.value = !compactMode.value
+  function toggleTheme() {
+    themeMode.value = themeMode.value === 'light' ? 'graphite' : 'light'
   }
 
   return {
-    compactMode,
+    themeMode,
     notesPerPage,
     densityClass,
-    toggleCompactMode,
+    toggleTheme,
   }
 })
